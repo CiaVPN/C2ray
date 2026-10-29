@@ -1,90 +1,138 @@
-# v2rayNG
+<h1 align="center">C2ray</h1>
 
-A V2Ray client for Android, support [Xray core](https://github.com/XTLS/Xray-core) and [v2fly core](https://github.com/v2fly/v2ray-core)
+<p align="center">
+  <strong>A V2Ray-compatible client for Android</strong><br>
+  A practical way to manage and use supported Xray/V2Ray connection profiles on your Android device.
+</p>
 
-[![API](https://img.shields.io/badge/API-24%2B-yellow.svg?style=flat)](https://developer.android.com/about/versions/lollipop)
-[![Kotlin Version](https://img.shields.io/badge/Kotlin-2.4.0-blue.svg)](https://kotlinlang.org)
-[![GitHub commit activity](https://img.shields.io/github/commit-activity/m/2dust/v2rayNG)](https://github.com/2dust/v2rayNG/commits/master)
-[![CodeFactor](https://www.codefactor.io/repository/github/2dust/v2rayng/badge)](https://www.codefactor.io/repository/github/2dust/v2rayng)
-[![GitHub Releases](https://img.shields.io/github/downloads/2dust/v2rayNG/latest/total?logo=github)](https://github.com/2dust/v2rayNG/releases)
-[![Chat on Telegram](https://img.shields.io/badge/Chat%20on-Telegram-brightgreen.svg)](https://t.me/v2rayn)
-
----
-
-## Download / 下载
-
-Download the latest release here:
-
-在这里下载最新版本：
-
-[https://github.com/2dust/v2rayNG/releases](https://github.com/2dust/v2rayNG/releases)
-
-> [!TIP]
-> v2rayNG is the mobile version. For the desktop version, please visit the v2rayN \
-> v2rayNG 是手机版，电脑版请访问 v2rayN
->
-> https://github.com/2dust/v2rayN
+<p align="center">
+  <a href="https://github.com/CiaVPN/C2ray"><img src="https://img.shields.io/badge/GitHub-C2ray-181717?style=for-the-badge&logo=github" alt="C2ray on GitHub"></a>
+  <a href="https://github.com/CiaVPN/C2ray/releases"><img src="https://img.shields.io/badge/Download-Releases-2ea44f?style=for-the-badge&logo=android" alt="C2ray releases"></a>
+  <a href="https://github.com/CiaVPN/C2ray/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge" alt="GPL-3.0 license"></a>
+</p>
 
 ---
 
-### Geoip and Geosite
+## About C2ray
 
-- geoip.dat and geosite.dat files are in `Android/data/com.v2ray.ang/files/assets` (path may differ on some Android device)
-- download feature will get enhanced version in this [repo](https://github.com/Loyalsoldier/v2ray-rules-dat) (note: it needs a working proxy)
-- latest official [domain list](https://github.com/Loyalsoldier/v2ray-rules-dat) and [ip list](https://github.com/Loyalsoldier/geoip) can be imported manually
-- possible to use a third-party dat file in the same folder, like [h2y](https://guide.v2fly.org/routing/sitedata.html#%E5%A4%96%E7%BD%AE%E7%9A%84%E5%9F%9F%E5%90%8D%E6%96%87%E4%BB%B6)
+**C2ray** is an Android client project in the V2Ray ecosystem. It is based on the open-source **v2rayNG** project and is intended to provide a convenient Android interface for working with supported Xray/V2Ray connections.
 
-More in our [wiki](https://github.com/2dust/v2rayNG/wiki)
+C2ray is a **client application, not a VPN service**. It does not provide proxy servers or connection subscriptions; you need a configuration or service of your own.
 
-### Geoip 与 Geosite
+> C2ray is an independently maintained project. It is not the official v2rayNG, Xray, or v2fly application.
 
-- geoip.dat 和 geosite.dat 文件位于 `Android/data/com.v2ray.ang/files/assets`（部分设备路径可能不同）
-- 下载功能将获取该 [仓库](https://github.com/Loyalsoldier/v2ray-rules-dat) 中的增强版本（注意：此功能需要一个可用的代理）
-- 最新官方 [域名列表](https://github.com/Loyalsoldier/v2ray-rules-dat) 和 [IP 列表](https://github.com/Loyalsoldier/geoip) 可手动导入
-- 也可在同一文件夹中使用第三方 dat 文件，例如 [h2y](https://guide.v2fly.org/routing/sitedata.html#%E5%A4%96%E7%BD%AE%E7%9A%84%E5%9F%9F%E5%90%8D%E6%96%87%E4%BB%B6)
+## Project Links
 
-更多内容请见我们的 [wiki](https://github.com/2dust/v2rayNG/wiki)
+| Resource | Link |
+| --- | --- |
+| **C2ray Repository** | [github.com/CiaVPN/C2ray](https://github.com/CiaVPN/C2ray) |
+| **Download Releases** | [C2ray Releases](https://github.com/CiaVPN/C2ray/releases) |
+| **Issues & Bug Reports** | [Report an issue](https://github.com/CiaVPN/C2ray/issues) |
+| **Project Owner** | [CiaVPN on GitHub](https://github.com/CiaVPN) |
 
----
+## Features
 
-## Development guide / 开发指南
+- **Android client:** Use supported proxy configurations from an Android device.
+- **Xray/V2Ray ecosystem:** Built around the core ecosystem used by V2Ray-compatible clients. Exact protocol and configuration support depends on the core included in a particular build.
+- **Connection profile management:** Import and manage supported connection profiles using the options available in the app.
+- **Android VPN integration:** Route selected device traffic through an Android VPN connection when enabled and permitted by the operating system.
+- **Routing data:** Supports the GeoIP/GeoSite data workflow used by the underlying project; routing behavior depends on your configuration and data files.
+- **Open source:** The code and build instructions are available in this repository.
 
-### Note
+Features can vary between builds. Check the source code and release notes for details about a specific version.
 
-- Android project under the V2rayNG folder can be compiled directly in Android Studio, or using the Gradle wrapper. But the v2ray core inside the aar is (probably) outdated.
-- The aar can be compiled from the Golang project [AndroidLibV2rayLite](https://github.com/2dust/AndroidLibV2rayLite) or [AndroidLibXrayLite](https://github.com/2dust/AndroidLibXrayLite). For a quick start, read the guides for [Go Mobile](https://github.com/golang/go/wiki/Mobile) and [Makefiles for Go Developers](https://tutorialedge.net/golang/makefiles-for-go-developers/).
-- v2rayNG can run on Android Emulators. For WSA, VPN permission needs to be granted via `appops set [package name] ACTIVATE_VPN allow`.
+## Download and Install
 
-### 提示
+1. Open the [C2ray Releases page](https://github.com/CiaVPN/C2ray/releases).
+2. Download an APK asset when a release is available.
+3. Open the APK on your Android device and follow Android's installation prompts. You may need to allow installation from the app you used to open the file.
+4. Open C2ray and import a supported connection configuration using the import options available in that build.
+5. Select the profile you want to use, start the connection, and approve Android's VPN permission prompt if it appears.
 
-- V2rayNG 文件夹下的 Android 项目可直接在 Android Studio 中编译，或使用 Gradle wrapper 编译。但 aar 内置的 v2ray core（可能）已过时。
-- aar 可由 Golang 项目 [AndroidLibV2rayLite](https://github.com/2dust/AndroidLibV2rayLite) 或 [AndroidLibXrayLite](https://github.com/2dust/AndroidLibXrayLite) 编译而成。快速入门可参考 [Go Mobile](https://github.com/golang/go/wiki/Mobile) 指南和 [Makefiles for Go Developers](https://tutorialedge.net/golang/makefiles-for-go-developers/)。
-- v2rayNG 可在 Android 模拟器上运行。对于 WSA，需要通过 `appops set [package name] ACTIVATE_VPN allow` 授予 VPN 权限。
+For your safety, download APKs only from sources you trust. If the Releases page has no APK assets, a packaged release has not been published there yet.
 
----
+## Build from Source
 
+### Requirements
 
-## GPG Verification / GPG 签名校验
+- Git
+- JDK compatible with the Gradle configuration (the current GitHub Actions workflow uses **Java 21**)
+- Android SDK and the SDK/NDK versions required by the current project configuration
+- Network access to fetch Gradle and project dependencies
 
-Release files are signed with GPG to verify authenticity and integrity, helping prevent mirror, ISP, or CDN hijacking.
+### Clone the repository
 
-发布文件已使用 GPG 签名，可用于校验文件真实性与完整性，预防镜像站、运营商或 CDN 劫持。
+Clone with submodules so the required source dependencies are checked out:
 
-### Fingerprint / 公钥指纹
-
-```text
-7694 5E9F 3E9A 168F 8070 F195 805D 661C
-134D FAF6 8903 C199 463C 31E5 AE90 3AE0
+```bash
+git clone --recurse-submodules https://github.com/CiaVPN/C2ray.git
+cd C2ray/V2rayNG
 ```
 
+### Build a debug APK
+
+**Linux / macOS / Kali Linux**
+
+```bash
+chmod +x gradlew
+./gradlew assembleDebug
+```
+
+**Windows Command Prompt**
+
+```bat
+gradlew.bat assembleDebug
+```
+
+If the build completes successfully, the debug APK is normally written under:
+
+```text
+V2rayNG/app/build/outputs/apk/debug/
+```
+
+Build requirements can change as the project evolves. For CI-specific SDK and NDK versions, see the [GitHub Actions build workflow](https://github.com/CiaVPN/C2ray/blob/main/.github/workflows/build.yml).
+
+## GeoIP and GeoSite Data
+
+The underlying project supports routing data such as GeoIP and GeoSite files. These files and their storage locations can vary by application version and Android release. Before replacing or importing routing data, check the current source code and the relevant documentation.
+
+Related resources:
+
+- [Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat) — GeoIP/GeoSite routing data
+- [Loyalsoldier/geoip](https://github.com/Loyalsoldier/geoip) — GeoIP data
+- [v2rayNG Wiki](https://github.com/2dust/v2rayNG/wiki) — upstream project documentation
+
+## Troubleshooting
+
+- **The connection does not start:** Check that the configuration is valid, the server is reachable, and Android VPN permission has been granted.
+- **A configuration cannot be imported:** Confirm that its format is supported by the version and core included in your build.
+- **Routing behaves unexpectedly:** Review your routing rules and GeoIP/GeoSite data.
+- **The app crashes or a feature is missing:** Check the release notes and open an issue with the app version, Android version, and relevant non-sensitive logs.
+
+Never post passwords, private keys, subscription URLs, access tokens, or complete private connection configurations in a public issue.
+
+## Privacy and Responsible Use
+
+C2ray is a networking client. Your privacy and traffic handling depend on the configuration you use, the remote server, the bundled core, and your device settings. Use only servers and configurations you trust, and follow the laws and network policies applicable to you.
+
+## Credits and Related Projects
+
+C2ray builds on work from the open-source community. See the repository's source files and license notices for the applicable attribution and licensing details.
+
+- **[v2rayNG](https://github.com/2dust/v2rayNG)** — upstream Android client project
+- **[Xray-core](https://github.com/XTLS/Xray-core)** — Xray core
+- **[v2fly/v2ray-core](https://github.com/v2fly/v2ray-core)** — V2Ray core
+- **[AndroidLibXrayLite](https://github.com/2dust/AndroidLibXrayLite)** — Android library used by the upstream build workflow
+- **[hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel)** — SOCKS5 tunnel component
+
+C2ray is not affiliated with or endorsed by the maintainers of these upstream projects unless explicitly stated by those maintainers.
+
+## License
+
+This repository includes a **GNU General Public License v3.0 (GPL-3.0)** license. See the [`LICENSE`](https://github.com/CiaVPN/C2ray/blob/main/LICENSE) file for the license text and review upstream notices before redistributing modified builds.
+
 ---
 
-## Community / 社区
-
-Telegram Group / Telegram 群组：
-
-[https://t.me/v2rayN](https://t.me/v2rayN)
-
-Telegram Channel / Telegram 频道：
-
-[https://t.me/github_2dust](https://t.me/github_2dust)
+<p align="center">
+  Made with care by <a href="https://github.com/CiaVPN">CiaVPN</a> · <a href="https://github.com/CiaVPN/C2ray">Source Code</a> · <a href="https://github.com/CiaVPN/C2ray/releases">Releases</a>
+</p>

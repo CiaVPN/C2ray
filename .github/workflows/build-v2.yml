@@ -82,7 +82,7 @@ jobs:
 
           APP="upstream/V2rayNG/app/src/main"
           GRADLE="upstream/V2rayNG/app/build.gradle.kts"
-          grep -q 'applicationId = "com.c2ray.ang"' "$GRADLE"
+          grep -q 'applicationId = "com.C2ray.ang"' "$GRADLE"
           grep -q 'versionCode = 802' "$GRADLE"
           grep -q 'versionName = "2.3.15"' "$GRADLE"
           test -s "$APP/res/drawable-nodpi/c2ray_logo.png"
@@ -114,16 +114,27 @@ jobs:
             --output upstream/V2rayNG/app/libs/libv2ray.aar
           test -s upstream/V2rayNG/app/libs/libv2ray.aar
 
+      - name: Decode persistent Android signing keystore
+        uses: timheuer/base64-to-file@v2.0.0
+        id: android_keystore
+        with:
+          fileName: "android_keystore.jks"
+          encodedString: \${{ secrets.APP_KEYSTORE_BASE64 }}
+
       - name: Build ARMv7 and ARM64 APKs
         shell: bash
         run: |
           set -euo pipefail
           cd upstream/V2rayNG
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          ./gradlew --no-daemon "-PABI_FILTERS=armeabi-v7a;arm64-v8a" assemblePlaystoreDebug
+          ./gradlew --no-daemon "-PABI_FILTERS=armeabi-v7a;arm64-v8a" assemblePlaystoreRelease \
+            -Pandroid.injected.signing.store.file="\${{ steps.android_keystore.outputs.filePath }}" \
+            -Pandroid.injected.signing.store.password="\${{ secrets.APP_KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="\${{ secrets.APP_KEYSTORE_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="\${{ secrets.APP_KEY_PASSWORD }}"
           mkdir -p "$GITHUB_WORKSPACE/build-dist"
-          cp app/build/outputs/apk/playstore/debug/C2ray_2.3.15_armeabi-v7a.apk "$GITHUB_WORKSPACE/build-dist/"
-          cp app/build/outputs/apk/playstore/debug/C2ray_2.3.15_arm64-v8a.apk "$GITHUB_WORKSPACE/build-dist/"
+          cp app/build/outputs/apk/playstore/release/C2ray_2.3.15_armeabi-v7a.apk "$GITHUB_WORKSPACE/build-dist/"
+          cp app/build/outputs/apk/playstore/release/C2ray_2.3.15_arm64-v8a.apk "$GITHUB_WORKSPACE/build-dist/"
 
       - name: Verify APK package, version, ABI, alignment and signature
         shell: bash
@@ -140,7 +151,7 @@ jobs:
             "$ZIPALIGN" -c -p 4 "$APK"
             "$APKSIGNER" verify --verbose "$APK"
             BADGING="$("$AAPT" dump badging "$APK")"
-            grep -q "package: name='com.c2ray.ang'" <<<"$BADGING"
+            grep -q "package: name='com.C2ray.ang'" <<<"$BADGING"
             grep -q "versionName='2.3.15'" <<<"$BADGING"
             grep -q "native-code:.*$ABI" <<<"$BADGING"
             echo "Verified: $(basename "$APK")"

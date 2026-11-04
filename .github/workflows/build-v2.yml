@@ -57,7 +57,7 @@ jobs:
           ACTUAL_UPSTREAM="$(git -C upstream rev-parse HEAD)"
           echo "Pinned v2rayNG source: $ACTUAL_UPSTREAM"
           test "$ACTUAL_UPSTREAM" = "$EXPECTED_UPSTREAM"
-          grep -q 'versionName = "2.3.16"' upstream/V2rayNG/app/build.gradle.kts
+          grep -q 'versionName = "2.3.15"' upstream/V2rayNG/app/build.gradle.kts
 
       - name: Install official C2ray branding assets
         shell: bash
@@ -80,11 +80,36 @@ jobs:
           python3 scripts/apply_official_branding.py
           node --check cloudflare-worker/src/index.js
 
+      - name: Check Cloudflare deployment credentials
+        id: cloudflare_credentials
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Cloudflare Worker source was checked but not deployed. Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repository secrets to enable automatic deployment."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy C2ray channel sync Worker
+        if: steps.cloudflare_credentials.outputs.configured == 'true'
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 deploy --config cloudflare-worker/wrangler.toml
+
           APP="upstream/V2rayNG/app/src/main"
           GRADLE="upstream/V2rayNG/app/build.gradle.kts"
           grep -q 'applicationId = "com.C2ray.ang"' "$GRADLE"
           grep -q 'versionCode = 803' "$GRADLE"
-          grep -q 'versionName = "2.3.15"' "$GRADLE"
+          grep -q 'versionName = "2.3.16"' "$GRADLE"
           test -s "$APP/res/drawable-nodpi/c2ray_logo.png"
           test -s "$APP/res/drawable-nodpi/c2ray_notification.png"
           test -s "$APP/res/drawable-nodpi/ic_stat_name.png"
@@ -123,7 +148,7 @@ jobs:
           ./gradlew --no-daemon "-PABI_FILTERS=armeabi-v7a;arm64-v8a" assemblePlaystoreDebug
           mkdir -p "$GITHUB_WORKSPACE/build-dist"
           cp app/build/outputs/apk/playstore/debug/C2ray_2.3.16_armeabi-v7a.apk "$GITHUB_WORKSPACE/build-dist/"
-          cp app/build/outputs/apk/playstore/debug/C2ray_2.3.15_arm64-v8a.apk "$GITHUB_WORKSPACE/build-dist/"
+          cp app/build/outputs/apk/playstore/debug/C2ray_2.3.16_arm64-v8a.apk "$GITHUB_WORKSPACE/build-dist/"
 
       - name: Verify APK package, version, ABI, alignment and signature
         shell: bash
@@ -134,7 +159,7 @@ jobs:
           ZIPALIGN="$ANDROID_HOME/build-tools/37.0.0/zipalign"
 
           for ABI in armeabi-v7a arm64-v8a; do
-            APK="$GITHUB_WORKSPACE/build-dist/C2ray_2.3.15_$ABI.apk"
+            APK="$GITHUB_WORKSPACE/build-dist/C2ray_2.3.16_$ABI.apk"
             test -s "$APK"
             unzip -t "$APK" >/dev/null
             "$ZIPALIGN" -c -p 4 "$APK"
@@ -158,8 +183,8 @@ jobs:
       - name: Upload ARMv7 APK separately
         uses: actions/upload-artifact@v4
         with:
-          name: C2ray-2.3.15-ARMv7
-          path: build-dist/C2ray_2.3.15_armeabi-v7a.apk
+          name: C2ray-2.3.16-ARMv7
+          path: build-dist/C2ray_2.3.16_armeabi-v7a.apk
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
@@ -167,8 +192,8 @@ jobs:
       - name: Upload ARM64 APK separately
         uses: actions/upload-artifact@v4
         with:
-          name: C2ray-2.3.15-ARM64
-          path: build-dist/C2ray_2.3.15_arm64-v8a.apk
+          name: C2ray-2.3.16-ARM64
+          path: build-dist/C2ray_2.3.16_arm64-v8a.apk
           if-no-files-found: error
           retention-days: 14
           compression-level: 0

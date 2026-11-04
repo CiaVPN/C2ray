@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: read
 
 concurrency:
@@ -15,17 +16,48 @@ concurrency:
 
 jobs:
   build:
+    name: Build verified C2ray ARM APKs
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     steps:
-      - name: Checkout C2ray and pinned upstream source
+      - name: Cancel older queued C2ray runs on this branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100")"
+          LATEST_RUN_ID="$(jq -r --arg branch "${GITHUB_REF_NAME}" --arg path ".github/workflows/build-v2.yml" '
+            [.workflow_runs[] | select(.head_branch == $branch and .path == $path)]
+            | sort_by(.run_number) | last | .id // empty
+          ' <<<"$RUNS")"
+
+          if [[ "$LATEST_RUN_ID" != "$GITHUB_RUN_ID" ]]; then
+            echo "::error::This run is older than the latest C2ray build. It will not build."
+            exit 1
+          fi
+
+          mapfile -t OLD_RUNS < <(jq -r --arg branch "${GITHUB_REF_NAME}" --arg current "${GITHUB_RUN_ID}" '
+            .workflow_runs[]
+            | select(.head_branch == $branch and (.id | tostring) != $current)
+            | select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending" or .status == "requested")
+            | .id
+          ' <<<"$RUNS")
+
+          for run_id in "${OLD_RUNS[@]}"; do
+            echo "Cancelling previous C2ray Actions run: $run_id"
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/$run_id/cancel" || true
+          done
+
+          echo "Only the newest C2ray build will continue."
+
+      - name: Checkout C2ray source and pinned upstream
         uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
 
-      # Checkout the logo repository itself instead of building fragile raw URLs
-      # from filenames containing spaces and punctuation.
-      - name: Checkout official C2ray logo assets
+      - name: Checkout official C2ray logo repository
         uses: actions/checkout@v4
         with:
           repository: CiaVPN/C2ray-Logo
@@ -33,7 +65,17 @@ jobs:
           path: branding-source
           fetch-depth: 1
 
-      - name: Set up Java
+      - name: Verify exact upstream release source
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_UPSTREAM="57907cf354d9769200ed4717b4430d605abe0952"
+          ACTUAL_UPSTREAM="$(git -C upstream rev-parse HEAD)"
+          echo "Pinned v2rayNG source: $ACTUAL_UPSTREAM"
+          test "$ACTUAL_UPSTREAM" = "$EXPECTED_UPSTREAM"
+          grep -q 'versionName = "2.3.15"' upstream/V2rayNG/app/build.gradle.kts
+
+      - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -42,9 +84,10 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
-      - name: Install Android SDK, NDK and Pillow
+      - name: Install Android SDK, NDK and image tooling
         shell: bash
         run: |
+          set -euo pipefail
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager --install \
             "platforms;android-37.0" \
@@ -54,7 +97,7 @@ jobs:
           python3 -m pip install --user Pillow
           echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
 
-      - name: Prepare official C2ray logo assets
+      - name: Install exact official C2ray logos
         shell: bash
         run: |
           set -euo pipefail
@@ -65,35 +108,42 @@ jobs:
           test -s branding/official_c2ray_notification.png
           file branding/*.png
 
-      - name: Apply C2ray branding and CiaConfig integration
+      - name: Apply C2ray identity and CiaConfig integration
         shell: bash
         run: |
           set -euo pipefail
+          python3 -m py_compile scripts/prepare_c2ray_v2.py scripts/apply_official_branding.py
           python3 scripts/prepare_c2ray_v2.py
           python3 scripts/apply_official_branding.py
           node --check cloudflare-worker/src/index.js
+
           APP="upstream/V2rayNG/app/src/main"
-          grep -q 'applicationId = "com.v2ray.ang"' upstream/V2rayNG/app/build.gradle.kts
-          grep -q 'versionName = "2.3.15"' upstream/V2rayNG/app/build.gradle.kts
+          GRADLE="upstream/V2rayNG/app/build.gradle.kts"
+          grep -q 'applicationId = "com.v2ray.ang"' "$GRADLE"
+          grep -q 'versionCode = 802' "$GRADLE"
+          grep -q 'versionName = "2.3.15"' "$GRADLE"
           test -s "$APP/res/drawable-nodpi/c2ray_logo.png"
           test -s "$APP/res/drawable-nodpi/c2ray_notification.png"
           test -s "$APP/res/drawable-nodpi/ic_stat_name.png"
           test -s "$APP/res/drawable-nodpi/ic_stat_proxy.png"
           test -s "$APP/res/drawable-nodpi/ic_stat_direct.png"
           grep -q 'R.drawable.ic_stat_name' "$APP/java/com/v2ray/ang/service/QSTileService.kt"
+          echo "C2ray branding, notification icon and Quick Settings tile are ready."
 
       - name: Build native tunnel libraries
         shell: bash
         run: |
+          set -euo pipefail
           chmod +x upstream/compile-hevtun.sh upstream/V2rayNG/gradlew
           cd upstream
           ./compile-hevtun.sh
           mkdir -p V2rayNG/app/libs
           cp -R libs/. V2rayNG/app/libs/
 
-      - name: Download Xray Android library
+      - name: Download matching Xray Android library
         shell: bash
         run: |
+          set -euo pipefail
           CURRENT_TAG="$(git -C upstream/AndroidLibXrayLite describe --tags --abbrev=0)"
           echo "Using AndroidLibXrayLite tag: $CURRENT_TAG"
           curl --fail --location --retry 3 \
@@ -101,32 +151,25 @@ jobs:
             --output upstream/V2rayNG/app/libs/libv2ray.aar
           test -s upstream/V2rayNG/app/libs/libv2ray.aar
 
-      - name: Build C2ray ARMv7 APK
+      - name: Build ARMv7 and ARM64 APKs in one Gradle run
         shell: bash
         run: |
           set -euo pipefail
           cd upstream/V2rayNG
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          ./gradlew --no-daemon -PABI_FILTERS=armeabi-v7a assemblePlaystoreDebug
+          ./gradlew --no-daemon "-PABI_FILTERS=armeabi-v7a;arm64-v8a" assemblePlaystoreDebug
           mkdir -p "$GITHUB_WORKSPACE/build-dist"
           cp app/build/outputs/apk/playstore/debug/C2ray_2.3.15_armeabi-v7a.apk "$GITHUB_WORKSPACE/build-dist/"
-
-      - name: Build C2ray ARM64 APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd upstream/V2rayNG
-          ./gradlew --no-daemon clean
-          ./gradlew --no-daemon -PABI_FILTERS=arm64-v8a assemblePlaystoreDebug
           cp app/build/outputs/apk/playstore/debug/C2ray_2.3.15_arm64-v8a.apk "$GITHUB_WORKSPACE/build-dist/"
 
-      - name: Verify APK install package, alignment and signature
+      - name: Verify APK files, package, version, ABI, alignment and signatures
         shell: bash
         run: |
           set -euo pipefail
           AAPT="$ANDROID_HOME/build-tools/37.0.0/aapt"
           APKSIGNER="$ANDROID_HOME/build-tools/37.0.0/apksigner"
           ZIPALIGN="$ANDROID_HOME/build-tools/37.0.0/zipalign"
+
           for ABI in armeabi-v7a arm64-v8a; do
             APK="$GITHUB_WORKSPACE/build-dist/C2ray_2.3.15_$ABI.apk"
             test -s "$APK"
@@ -136,12 +179,13 @@ jobs:
             "$AAPT" dump badging "$APK" | grep -q "package: name='com.v2ray.ang'"
             "$AAPT" dump badging "$APK" | grep -q "versionName='2.3.15'"
             "$AAPT" dump badging "$APK" | grep -q "native-code:.*$ABI"
+            echo "Verified: $(basename "$APK")"
           done
 
-      - name: Upload verified ARMv7 and ARM64 APKs
+      - name: Upload only the two verified APKs
         uses: actions/upload-artifact@v4
         with:
-          name: C2ray-v2.3.15-verified-APKs
+          name: C2ray-2.3.15-ARMv7-ARM64-APKs
           path: build-dist/*.apk
           if-no-files-found: error
           retention-days: 14

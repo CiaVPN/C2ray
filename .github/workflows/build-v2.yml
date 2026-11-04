@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: c2ray-v2-build-${{ github.ref }}
+  group: c2ray-v2-cleanup-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

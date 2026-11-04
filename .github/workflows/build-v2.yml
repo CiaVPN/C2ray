@@ -80,6 +80,21 @@ jobs:
           python3 scripts/apply_official_branding.py
           node --check cloudflare-worker/src/index.js
 
+          APP="upstream/V2rayNG/app/src/main"
+          GRADLE="upstream/V2rayNG/app/build.gradle.kts"
+          grep -q 'applicationId = "com.C2ray.ang"' "$GRADLE"
+          grep -q 'versionCode = 803' "$GRADLE"
+          grep -q 'versionName = "2.3.16"' "$GRADLE"
+          test -s "$APP/res/drawable/ic_telegram_24dp.xml"
+          test -s "$APP/res/drawable-nodpi/c2ray_logo.png"
+          test -s "$APP/res/drawable-nodpi/c2ray_notification.png"
+          test -s "$APP/res/drawable-nodpi/ic_stat_name.png"
+          test -s "$APP/res/drawable-nodpi/ic_stat_direct.png"
+          test -s "$APP/res/drawable-nodpi/ic_stat_proxy.png"
+          grep -q 'CiaConfigChannel(R.drawable.ic_telegram_24dp' "$APP/java/com/v2ray/ang/ui/main/MainDrawer.kt"
+          grep -q 'R.drawable.ic_stat_name' "$APP/java/com/v2ray/ang/service/QSTileService.kt"
+          echo "C2ray launcher, Telegram drawer, notification and Quick Settings resources are ready."
+
       - name: Check Cloudflare deployment credentials
         id: cloudflare_credentials
         shell: bash
@@ -104,19 +119,6 @@ jobs:
         run: |
           set -euo pipefail
           npx --yes wrangler@4 deploy --config cloudflare-worker/wrangler.toml
-
-          APP="upstream/V2rayNG/app/src/main"
-          GRADLE="upstream/V2rayNG/app/build.gradle.kts"
-          grep -q 'applicationId = "com.C2ray.ang"' "$GRADLE"
-          grep -q 'versionCode = 803' "$GRADLE"
-          grep -q 'versionName = "2.3.16"' "$GRADLE"
-          test -s "$APP/res/drawable-nodpi/c2ray_logo.png"
-          test -s "$APP/res/drawable-nodpi/c2ray_notification.png"
-          test -s "$APP/res/drawable-nodpi/ic_stat_name.png"
-          test -s "$APP/res/drawable-nodpi/ic_stat_direct.png"
-          test -s "$APP/res/drawable-nodpi/ic_stat_proxy.png"
-          grep -q 'R.drawable.ic_stat_name' "$APP/java/com/v2ray/ang/service/QSTileService.kt"
-          echo "C2ray launcher, drawer, notification and Quick Settings resources are ready."
 
       - name: Build native tunnel libraries
         shell: bash

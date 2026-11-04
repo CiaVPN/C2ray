@@ -1,6 +1,9 @@
 package com.v2ray.ang.ui.ciaconfig
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.Data
@@ -18,7 +21,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.IOException
-import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
@@ -40,6 +42,9 @@ internal object CiaConfigSync {
 }
 
 object CiaConfigSyncScheduler {
+    private var foregroundHandler: Handler? = null
+    private var foregroundTask: Runnable? = null
+
     fun configure(context: Context, enabled: Boolean, intervalMinutes: Int) {
         val workManager = WorkManager.getInstance(context)
         if (!enabled) {
@@ -47,8 +52,13 @@ object CiaConfigSyncScheduler {
             return
         }
 
+        // WorkManager/JobScheduler cannot schedule periodic work more often than every 15 minutes.
+        // Faster choices are handled by the foreground poller below while C2ray is open.
+        val backgroundInterval = intervalMinutes
+            .coerceAtLeast(CiaConfigSync.MIN_INTERVAL_MINUTES)
+            .coerceAtMost(360)
         val request = PeriodicWorkRequestBuilder<CiaConfigSyncWorker>(
-            intervalMinutes.coerceAtLeast(CiaConfigSync.MIN_INTERVAL_MINUTES).toLong(),
+            backgroundInterval.toLong(),
             TimeUnit.MINUTES
         )
             .setConstraints(
@@ -65,6 +75,45 @@ object CiaConfigSyncScheduler {
         )
     }
 
+    @Synchronized
+    fun startForegroundPolling(context: Context) {
+        stopForegroundPolling()
+        val appContext = context.applicationContext
+        val prefs = appContext.getSharedPreferences(CiaConfigSync.PREFS, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean(CiaConfigSync.KEY_ENABLED, true)) return
+
+        val intervalMinutes = prefs.getInt(CiaConfigSync.KEY_INTERVAL, 5).coerceIn(1, 360)
+        val handler = Handler(Looper.getMainLooper())
+        val task = object : Runnable {
+            override fun run() {
+                val currentPrefs = appContext.getSharedPreferences(
+                    CiaConfigSync.PREFS,
+                    Context.MODE_PRIVATE
+                )
+                if (!currentPrefs.getBoolean(CiaConfigSync.KEY_ENABLED, true)) {
+                    stopForegroundPolling()
+                    return
+                }
+
+                runNow(appContext, force = false)
+                handler.postDelayed(this, intervalMinutes * 60_000L)
+            }
+        }
+
+        foregroundHandler = handler
+        foregroundTask = task
+        handler.post(task)
+    }
+
+    @Synchronized
+    fun stopForegroundPolling() {
+        val handler = foregroundHandler
+        val task = foregroundTask
+        if (handler != null && task != null) handler.removeCallbacks(task)
+        foregroundHandler = null
+        foregroundTask = null
+    }
+
     fun runNow(context: Context, force: Boolean = true): OneTimeWorkRequest {
         val request = OneTimeWorkRequestBuilder<CiaConfigSyncWorker>()
             .setInputData(workDataOf(CiaConfigSync.KEY_FORCE to force))
@@ -73,11 +122,12 @@ object CiaConfigSyncScheduler {
                     .setRequiredNetworkType(NetworkType.CONNECTED)
                     .build()
             )
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.SECONDS)
             .build()
 
         WorkManager.getInstance(context).enqueueUniqueWork(
             CiaConfigSync.MANUAL_WORK,
-            ExistingWorkPolicy.REPLACE,
+            if (force) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
             request
         )
         return request
@@ -97,36 +147,54 @@ class CiaConfigSyncWorker(
             return Result.success()
         }
 
-        val endpoint = CiaConfigSync.WORKER_ENDPOINT
-        if (!endpoint.startsWith("https://", ignoreCase = true)) {
-            prefs.edit().putString(CiaConfigSync.KEY_LAST_ERROR, "Set a valid HTTPS Worker URL").apply()
-            return Result.failure(workDataOf("error" to "Set a valid HTTPS Worker URL"))
-        }
-
         return try {
             val responseBody = withContext(Dispatchers.IO) {
-                val connection = URL(endpoint).openConnection() as? HttpsURLConnection
-                    ?: throw IOException("HTTPS endpoint is required")
+                val connection = URL(CiaConfigSync.WORKER_ENDPOINT).openConnection() as? HttpsURLConnection
+                    ?: throw IOException("Secure HTTPS connection could not be created")
                 try {
                     connection.requestMethod = "GET"
-                    connection.connectTimeout = 15_000
-                    connection.readTimeout = 20_000
+                    connection.instanceFollowRedirects = true
+                    connection.useCaches = false
+                    connection.connectTimeout = 30_000
+                    connection.readTimeout = 30_000
                     connection.setRequestProperty("Accept", "application/json")
-                    connection.setRequestProperty("User-Agent", "C2ray-Android/2.0")
+                    connection.setRequestProperty("Cache-Control", "no-cache")
+                    connection.setRequestProperty("Pragma", "no-cache")
+                    connection.setRequestProperty("Connection", "close")
+                    connection.setRequestProperty("User-Agent", "C2ray-Android/2.3.15")
+
                     val status = connection.responseCode
-                    if (status !in 200..299) throw IOException("Worker returned HTTP " + status)
-                    connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                    val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+                    val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                    if (status !in 200..299) {
+                        val detail = body.replace(Regex("\\s+"), " ").take(300)
+                        throw IOException(
+                            if (detail.isBlank()) "Channel Worker returned HTTP $status"
+                            else "Channel Worker returned HTTP $status: $detail"
+                        )
+                    }
+                    if (body.isBlank()) throw IOException("Channel Worker returned an empty response")
+                    body
                 } finally {
                     connection.disconnect()
                 }
             }
 
-            val root = JSONObject(responseBody)
-            if (!root.optBoolean("ok", false)) throw IOException(root.optString("error", "Worker response is not ok"))
-            val configArray = root.optJSONArray("configs") ?: throw IOException("No configs array in Worker response")
+            val root = try {
+                JSONObject(responseBody)
+            } catch (error: Exception) {
+                throw IOException("Channel Worker returned invalid JSON: ${error.message ?: "parse error"}")
+            }
+            if (!root.optBoolean("ok", false)) {
+                throw IOException(root.optString("error", "Channel Worker response is not ok"))
+            }
+            val configArray = root.optJSONArray("configs")
+                ?: throw IOException("Channel Worker response has no configs array")
 
-            val importedHashes = (prefs.getStringSet(CiaConfigSync.KEY_HASHES, emptySet()) ?: emptySet()).toMutableSet()
+            val importedHashes = (prefs.getStringSet(CiaConfigSync.KEY_HASHES, emptySet()) ?: emptySet())
+                .toMutableSet()
             val newUris = mutableListOf<String>()
+            val newHashes = mutableListOf<String>()
             val hashesInResponse = mutableSetOf<String>()
 
             for (index in 0 until configArray.length()) {
@@ -137,6 +205,7 @@ class CiaConfigSyncWorker(
                 val hash = sha256(uri)
                 if (hash !in importedHashes && hashesInResponse.add(hash)) {
                     newUris.add(uri)
+                    newHashes.add(hash)
                 }
             }
 
@@ -145,10 +214,9 @@ class CiaConfigSyncWorker(
                 val result = withContext(Dispatchers.IO) {
                     AngConfigManager.importBatchConfig(newUris.joinToString("\n"), "", true)
                 }
-                imported = result.first
-                if (imported > 0) {
-                    importedHashes.addAll(hashesInResponse)
-                }
+                imported = result.first.coerceIn(0, newUris.size)
+                // Only mark successfully imported links as seen; a rejected link can be retried later.
+                importedHashes.addAll(newHashes.take(imported))
             }
 
             val boundedHashes = importedHashes.toList().takeLast(2500).toSet()
@@ -167,7 +235,7 @@ class CiaConfigSyncWorker(
                 )
             )
         } catch (error: Exception) {
-            val message = error.message ?: "Channel sync failed"
+            val message = error.message ?: error.javaClass.simpleName.ifBlank { "Channel sync failed" }
             prefs.edit().putString(CiaConfigSync.KEY_LAST_ERROR, message).apply()
             if (runAttemptCount < 3) Result.retry()
             else Result.failure(workDataOf("error" to message))
@@ -184,6 +252,6 @@ class CiaConfigSyncWorker(
 
     private fun sha256(value: String): String {
         val bytes = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
-        return bytes.joinToString("") { byte -> "%02x".format(byte) }
+        return bytes.joinToString("") { byte -> "%02x".format(it) }
     }
 }

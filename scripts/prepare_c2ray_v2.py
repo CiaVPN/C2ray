@@ -142,24 +142,30 @@ def main() -> None:
         '            MainDestination.Settings -> Intent(this, SettingsActivity::class.java)',
         "Channel Sync and CiaConfig channel navigation",
     )
-    replace_once(
-        activity,
-        '        checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) {}\n\n'
-        '    }\n\n'
-        '    @Composable',
-        '        checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) {}\n\n'
-        '    }\n\n'
-        '    override fun onResume() {\n'
-        '        super.onResume()\n'
-        '        CiaConfigSyncScheduler.startForegroundPolling(this)\n'
-        '    }\n\n'
-        '    override fun onPause() {\n'
-        '        CiaConfigSyncScheduler.stopForegroundPolling()\n'
-        '        super.onPause()\n'
-        '    }\n\n'
-        '    @Composable',
-        "Start fast channel sync while the main app is foregrounded",
-    )
+    # Attach fast polling at a stable class-level location. The upstream
+    # MainActivity formatting can change, so do not depend on blank lines
+    # around the onCreate closing brace.
+    activity_text = activity.read_text(encoding="utf-8")
+    if "CiaConfigSyncScheduler.startForegroundPolling(this)" not in activity_text:
+        anchor = "    @Composable\\n    override fun ScreenContent() {"
+        if activity_text.count(anchor) != 1:
+            raise RuntimeError(
+                "Could not find the unique MainActivity ScreenContent declaration "
+                "for foreground channel sync hooks"
+            )
+        lifecycle_hooks = (
+            "    override fun onResume() {\\n"
+            "        super.onResume()\\n"
+            "        CiaConfigSyncScheduler.startForegroundPolling(this)\\n"
+            "    }\\n\\n"
+            "    override fun onPause() {\\n"
+            "        CiaConfigSyncScheduler.stopForegroundPolling()\\n"
+            "        super.onPause()\\n"
+            "    }\\n\\n"
+        )
+        activity_text = activity_text.replace(anchor, lifecycle_hooks + anchor, 1)
+        activity.write_text(activity_text, encoding="utf-8")
+
 
     # Refresh the profile list after the CiaConfig screen returns from a completed import.
     activity_text = activity.read_text(encoding="utf-8")

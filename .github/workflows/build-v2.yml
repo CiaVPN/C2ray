@@ -22,22 +22,30 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - name: Cancel older queued and running C2ray builds
+      - name: Cancel all older workflow runs on this branch
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           CURRENT_RUN="$GITHUB_RUN_ID"
-          RUN_IDS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$GITHUB_REF_NAME&per_page=100" --jq ".workflow_runs[] | select(.path == \".github/workflows/build-v2.yml\" and .id != $CURRENT_RUN and .status != \"completed\" and .status != \"cancelled\") | .id")"
-          if [[ -z "$RUN_IDS" ]]; then
-            echo "No older C2ray builds need cancellation."
+          RUNS="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?branch=$GITHUB_REF_NAME&per_page=100" --jq ".workflow_runs[] | select(.id != $CURRENT_RUN and .status != \"completed\") | [.id, .status] | @tsv")"
+
+          if [[ -z "$RUNS" ]]; then
+            echo "No older workflow runs need cancellation."
           else
-            while IFS= read -r RUN_ID; do
+            while IFS=$'\\t' read -r RUN_ID RUN_STATUS; do
               [[ -z "$RUN_ID" ]] && continue
-              echo "Cancelling stale C2ray workflow run: $RUN_ID"
-              gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/cancel" || echo "::warning::Could not cancel run $RUN_ID"
-            done <<< "$RUN_IDS"
+              echo "Cancelling older workflow run $RUN_ID (status: $RUN_STATUS)"
+              if gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/cancel" >/dev/null 2>&1; then
+                echo "Cancellation accepted for $RUN_ID"
+              elif gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/force-cancel" >/dev/null 2>&1; then
+                echo "Force-cancellation accepted for $RUN_ID"
+              else
+                echo "::error::Could not cancel older workflow run $RUN_ID (status: $RUN_STATUS)"
+                exit 1
+              fi
+            done <<< "$RUNS"
           fi
 
       - name: Checkout C2ray source and pinned upstream

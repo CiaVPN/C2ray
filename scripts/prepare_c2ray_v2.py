@@ -48,11 +48,18 @@ def main() -> None:
     if not icon_source.is_file():
         raise RuntimeError("C2ray source icon was not found at " + str(icon_source))
 
-    # Keep the existing application ID/package intact.
+    # Give C2ray a unique install identity so it can coexist with v2rayNG.
+    # Keep the upstream Kotlin namespace (com.v2ray.ang) unchanged; only the
+    # Android applicationId controls the installed package name.
     gradle = APP / "build.gradle.kts"
     gradle_text = gradle.read_text(encoding="utf-8")
     if 'applicationId = "com.v2ray.ang"' not in gradle_text:
-        raise RuntimeError("Unexpected upstream applicationId; refusing to change package identity")
+        raise RuntimeError("Unexpected upstream applicationId; refusing to apply the C2ray package identity")
+    gradle_text = gradle_text.replace(
+        'applicationId = "com.v2ray.ang"',
+        'applicationId = "com.c2ray.ang"',
+        1,
+    )
     # Upstream is pinned to v2rayNG 2.3.15. Keep that release identity while
     # raising versionCode so this branded build installs as an update.
     if 'versionName = "2.3.15"' not in gradle_text or "versionCode = 755" not in gradle_text:
@@ -193,7 +200,7 @@ def main() -> None:
     shutil.copy2(ROOT / "android-integration/CiaConfigActivity.kt", target / "CiaConfigActivity.kt")
 
     print("C2ray v2 Android integration applied.")
-    print("Application ID preserved: com.v2ray.ang")
+    print("Application ID set to: com.c2ray.ang")
     print("Channel: https://t.me/CiaConfig")
 
 

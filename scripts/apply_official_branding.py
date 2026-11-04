@@ -123,9 +123,10 @@ def main() -> None:
     text = gradle.read_text(encoding="utf-8")
     if 'applicationId = "com.C2ray.ang"' not in text:
         raise RuntimeError("Unexpected package ID; expected com.C2ray.ang")
-    text = text.replace("versionCode = 755", "versionCode = 802")
+    text = text.replace("versionCode = 802", "versionCode = 803")
+    text = text.replace('versionName = "2.3.15"', 'versionName = "2.3.16"')
     text = text.replace("v2rayNG_", "C2ray_")
-    if "versionCode = 802" not in text or 'versionName = "2.3.15"' not in text:
+    if "versionCode = 803" not in text or 'versionName = "2.3.16"' not in text:
         raise RuntimeError("Expected upstream 2.3.15 metadata was not preserved")
     gradle.write_text(text, encoding="utf-8")
 
@@ -202,7 +203,7 @@ def main() -> None:
 
     install_icons()
 
-    print("C2ray 2.3.15 official branding installed.")
+    print("C2ray 2.3.16 official branding installed.")
     print("Package ID set: com.C2ray.ang")
     print("Main logo: CiaVPN/C2ray-Logo")
     print("Notification and Quick Settings logo: CiaVPN/C2ray-Logo")

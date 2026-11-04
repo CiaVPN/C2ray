@@ -88,7 +88,7 @@ def main() -> None:
     replace_once(
         drawer,
         '    Promotion(R.drawable.ic_promotion_24dp, R.string.title_pref_promotion),',
-        '    CiaConfigChannel(R.drawable.ic_promotion_24dp, R.string.title_cia_config_channel),\n'
+        '    CiaConfigChannel(R.drawable.ic_telegram_24dp, R.string.title_cia_config_channel),\n'
         '    Promotion(R.drawable.ic_promotion_24dp, R.string.title_pref_promotion),',
         "Add CiaConfig Telegram drawer destination",
     )
@@ -127,7 +127,7 @@ def main() -> None:
         '        CiaConfigSyncScheduler.configure(\n'
         '            this,\n'
         '            syncPrefs.getBoolean(CiaConfigSync.KEY_ENABLED, true),\n'
-        '            syncPrefs.getInt(CiaConfigSync.KEY_INTERVAL, 30)\n'
+        '            syncPrefs.getInt(CiaConfigSync.KEY_INTERVAL, 5)\n'
         '        )\n\n        checkAndRequestPermission',
         "Restore CiaConfig background schedule",
     )
@@ -142,6 +142,25 @@ def main() -> None:
         '            MainDestination.Settings -> Intent(this, SettingsActivity::class.java)',
         "Channel Sync and CiaConfig channel navigation",
     )
+    replace_once(
+        activity,
+        '        checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) {}\n\n'
+        '    }\n\n'
+        '    @Composable',
+        '        checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) {}\n\n'
+        '    }\n\n'
+        '    override fun onResume() {\n'
+        '        super.onResume()\n'
+        '        CiaConfigSyncScheduler.startForegroundPolling(this)\n'
+        '    }\n\n'
+        '    override fun onPause() {\n'
+        '        CiaConfigSyncScheduler.stopForegroundPolling()\n'
+        '        super.onPause()\n'
+        '    }\n\n'
+        '    @Composable',
+        "Start fast channel sync while the main app is foregrounded",
+    )
+
     # Refresh the profile list after the CiaConfig screen returns from a completed import.
     activity_text = activity.read_text(encoding="utf-8")
     activity_text = activity_text.replace(
@@ -211,6 +230,11 @@ def main() -> None:
     target = APP / "src/main/java/com/v2ray/ang/ui/ciaconfig"
     target.mkdir(parents=True, exist_ok=True)
     shutil.copy2(ROOT / "android-integration/CiaConfigSyncWorker.kt", target / "CiaConfigSyncWorker.kt")
+    telegram_icon = ROOT / "android-integration/ic_telegram_24dp.xml"
+    if not telegram_icon.is_file():
+        raise RuntimeError("Telegram drawer icon resource is missing")
+    (APP / "src/main/res/drawable").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(telegram_icon, APP / "src/main/res/drawable/ic_telegram_24dp.xml")
     shutil.copy2(ROOT / "android-integration/CiaConfigActivity.kt", target / "CiaConfigActivity.kt")
 
     print("C2ray v2 Android integration applied.")

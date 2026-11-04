@@ -161,7 +161,7 @@ class CiaConfigSyncWorker(
                     connection.setRequestProperty("Cache-Control", "no-cache")
                     connection.setRequestProperty("Pragma", "no-cache")
                     connection.setRequestProperty("Connection", "close")
-                    connection.setRequestProperty("User-Agent", "C2ray-Android/2.3.15")
+                    connection.setRequestProperty("User-Agent", "C2ray-Android/2.3.16")
 
                     val status = connection.responseCode
                     val stream = if (status in 200..299) connection.inputStream else connection.errorStream

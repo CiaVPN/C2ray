@@ -186,7 +186,9 @@ class CiaConfigSyncWorker(
                 throw IOException("Channel Worker returned invalid JSON: ${error.message ?: "parse error"}")
             }
             if (!root.optBoolean("ok", false)) {
-                throw IOException(root.optString("error", "Channel Worker response is not ok"))
+                val reason = root.optString("error", "Channel Worker response is not ok")
+                val detail = root.optString("message", "").takeIf { it.isNotBlank() }
+                throw IOException(if (detail == null) reason else "$reason: $detail")
             }
             val configArray = root.optJSONArray("configs")
                 ?: throw IOException("Channel Worker response has no configs array")

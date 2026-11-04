@@ -53,8 +53,11 @@ def main() -> None:
     gradle_text = gradle.read_text(encoding="utf-8")
     if 'applicationId = "com.v2ray.ang"' not in gradle_text:
         raise RuntimeError("Unexpected upstream applicationId; refusing to change package identity")
-    gradle_text = gradle_text.replace("versionCode = 755", "versionCode = 800")
-    gradle_text = gradle_text.replace('versionName = "2.3.15"', 'versionName = "2.0.0"')
+    # Upstream is pinned to v2rayNG 2.3.15. Keep that release identity while
+    # raising versionCode so this branded build installs as an update.
+    if 'versionName = "2.3.15"' not in gradle_text or "versionCode = 755" not in gradle_text:
+        raise RuntimeError("Unexpected upstream version; refusing to label a different source as C2ray 2.3.15")
+    gradle_text = gradle_text.replace("versionCode = 755", "versionCode = 802")
     gradle_text = gradle_text.replace("v2rayNG_", "C2ray_")
     gradle.write_text(gradle_text, encoding="utf-8")
 

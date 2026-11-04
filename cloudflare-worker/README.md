@@ -11,7 +11,7 @@ npx wrangler login
 npx wrangler deploy
 ```
 
-Then copy the URL assigned by Cloudflare, append `/api/configs`, and paste it into C2ray → side menu → CiaConfig - Channel Sync.
+Deploy it with the worker name `c2ray-channel-sync` in the `webserviceamir` Cloudflare account. C2ray uses `https://c2ray-channel-sync.webserviceamir.workers.dev/api/configs` internally; the address is not shown in the app or editable by users.
 
 ## Endpoints
 

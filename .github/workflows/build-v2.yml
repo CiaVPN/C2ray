@@ -1,4 +1,4 @@
-name: C2ray 2.3.15 Android APK
+name: C2ray 2.3.16 Android APK
 
 on:
   push:
@@ -57,7 +57,7 @@ jobs:
           ACTUAL_UPSTREAM="$(git -C upstream rev-parse HEAD)"
           echo "Pinned v2rayNG source: $ACTUAL_UPSTREAM"
           test "$ACTUAL_UPSTREAM" = "$EXPECTED_UPSTREAM"
-          grep -q 'versionName = "2.3.15"' upstream/V2rayNG/app/build.gradle.kts
+          grep -q 'versionName = "2.3.16"' upstream/V2rayNG/app/build.gradle.kts
 
       - name: Install official C2ray branding assets
         shell: bash
@@ -83,7 +83,7 @@ jobs:
           APP="upstream/V2rayNG/app/src/main"
           GRADLE="upstream/V2rayNG/app/build.gradle.kts"
           grep -q 'applicationId = "com.C2ray.ang"' "$GRADLE"
-          grep -q 'versionCode = 802' "$GRADLE"
+          grep -q 'versionCode = 803' "$GRADLE"
           grep -q 'versionName = "2.3.15"' "$GRADLE"
           test -s "$APP/res/drawable-nodpi/c2ray_logo.png"
           test -s "$APP/res/drawable-nodpi/c2ray_notification.png"
@@ -122,7 +122,7 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           ./gradlew --no-daemon "-PABI_FILTERS=armeabi-v7a;arm64-v8a" assemblePlaystoreDebug
           mkdir -p "$GITHUB_WORKSPACE/build-dist"
-          cp app/build/outputs/apk/playstore/debug/C2ray_2.3.15_armeabi-v7a.apk "$GITHUB_WORKSPACE/build-dist/"
+          cp app/build/outputs/apk/playstore/debug/C2ray_2.3.16_armeabi-v7a.apk "$GITHUB_WORKSPACE/build-dist/"
           cp app/build/outputs/apk/playstore/debug/C2ray_2.3.15_arm64-v8a.apk "$GITHUB_WORKSPACE/build-dist/"
 
       - name: Verify APK package, version, ABI, alignment and signature
@@ -141,7 +141,7 @@ jobs:
             "$APKSIGNER" verify --verbose "$APK"
             BADGING="$("$AAPT" dump badging "$APK")"
             grep -q "package: name='com.C2ray.ang'" <<<"$BADGING"
-            grep -q "versionName='2.3.15'" <<<"$BADGING"
+            grep -q "versionName='2.3.16'" <<<"$BADGING"
             grep -q "native-code:.*$ABI" <<<"$BADGING"
             echo "Verified: $(basename "$APK")"
           done
@@ -149,7 +149,7 @@ jobs:
       - name: Upload the two verified APKs
         uses: actions/upload-artifact@v4
         with:
-          name: C2ray-2.3.15-ARMv7-ARM64-APKs
+          name: C2ray-2.3.16-ARMv7-ARM64-APKs
           path: build-dist/*.apk
           if-no-files-found: error
           retention-days: 14

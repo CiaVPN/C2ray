@@ -46,7 +46,8 @@ jobs:
 
           for run_id in "${OLD_RUNS[@]}"; do
             echo "Cancelling previous C2ray Actions run: $run_id"
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/$run_id/cancel" || true
+            # force-cancel works for queued, waiting and in-progress runs.
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/$run_id/force-cancel" || true
           done
 
           echo "Only the newest C2ray build will continue."

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Final 2.3.16 build: robust foreground lifecycle hook is validated below.
 """Apply the C2ray v2 branding and CiaConfig integration to the pinned upstream tree."""
 from pathlib import Path
 import re

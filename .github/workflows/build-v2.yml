@@ -1,4 +1,4 @@
-name: C2ray v2 Android APK
+name: C2ray 2.0.2 Android APK
 
 on:
   push:
@@ -32,7 +32,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
-      - name: Install Android SDK and NDK
+      - name: Install Android SDK, NDK and Pillow
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
@@ -41,19 +41,40 @@ jobs:
             "build-tools;37.0.0" \
             "platform-tools" \
             "ndk;30.0.16248370"
+          python3 -m pip install --user Pillow
           echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
 
-      - name: Apply C2ray v2 branding and channel integration
+      - name: Download exact official C2ray-Logo images
+        shell: bash
+        run: |
+          mkdir -p branding
+          curl --fail --location --retry 3 \
+            "https://raw.githubusercontent.com/CiaVPN/C2ray-Logo/main/ChatGPT%20Image%20Nov%204%2C%202026%2C%2006_50_57%20PM.png" \
+            --output branding/official_c2ray_logo.png
+          curl --fail --location --retry 3 \
+            "https://raw.githubusercontent.com/CiaVPN/C2ray-Logo/main/InShot_20261104_190230658.png" \
+            --output branding/official_c2ray_notification.png
+          test -s branding/official_c2ray_logo.png
+          test -s branding/official_c2ray_notification.png
+          file branding/*.png
+
+      - name: Apply C2ray branding and CiaConfig integration
+        shell: bash
         run: |
           python3 scripts/prepare_c2ray_v2.py
+          python3 scripts/apply_official_branding.py
           node --check cloudflare-worker/src/index.js
+          grep -q 'applicationId = "com.v2ray.ang"' upstream/V2rayNG/app/build.gradle.kts
+          grep -q 'versionName = "2.0.2"' upstream/V2rayNG/app/build.gradle.kts
+          test -s upstream/V2rayNG/app/src/main/res/drawable-nodpi/c2ray_logo.png
+          test -s upstream/V2rayNG/app/src/main/res/drawable-nodpi/c2ray_notification.png
+          test -s upstream/V2rayNG/app/src/main/res/drawable-nodpi/ic_stat_name.png
 
       - name: Build native tunnel libraries
         shell: bash
         run: |
-          chmod +x compile-hevtun.sh upstream/V2rayNG/gradlew
+          chmod +x upstream/compile-hevtun.sh upstream/V2rayNG/gradlew
           cd upstream
-          chmod +x compile-hevtun.sh
           ./compile-hevtun.sh
           mkdir -p V2rayNG/app/libs
           cp -R libs/. V2rayNG/app/libs/
@@ -67,17 +88,45 @@ jobs:
             "https://github.com/2dust/AndroidLibXrayLite/releases/download/$CURRENT_TAG/libv2ray.aar" \
             --output upstream/V2rayNG/app/libs/libv2ray.aar
 
-      - name: Build C2ray debug APKs
+      - name: Build C2ray ARMv7 APK
         shell: bash
         run: |
           cd upstream/V2rayNG
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          ./gradlew --no-daemon assemblePlaystoreDebug
+          ./gradlew --no-daemon -PABI_FILTERS=armeabi-v7a assemblePlaystoreDebug
+          mkdir -p "$GITHUB_WORKSPACE/build-dist"
+          cp app/build/outputs/apk/playstore/debug/C2ray_2.0.2_armeabi-v7a.apk "$GITHUB_WORKSPACE/build-dist/"
 
-      - name: Upload APKs
+      - name: Build C2ray ARM64 APK
+        shell: bash
+        run: |
+          cd upstream/V2rayNG
+          ./gradlew --no-daemon clean
+          ./gradlew --no-daemon -PABI_FILTERS=arm64-v8a assemblePlaystoreDebug
+          cp app/build/outputs/apk/playstore/debug/C2ray_2.0.2_arm64-v8a.apk "$GITHUB_WORKSPACE/build-dist/"
+
+      - name: Verify APK install package, alignment and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAPT="$ANDROID_HOME/build-tools/37.0.0/aapt"
+          APKSIGNER="$ANDROID_HOME/build-tools/37.0.0/apksigner"
+          ZIPALIGN="$ANDROID_HOME/build-tools/37.0.0/zipalign"
+          for ABI in armeabi-v7a arm64-v8a; do
+            APK="$GITHUB_WORKSPACE/build-dist/C2ray_2.0.2_"$ABI".apk"
+            test -s "$APK"
+            unzip -t "$APK" >/dev/null
+            "$ZIPALIGN" -c -p 4 "$APK"
+            "$APKSIGNER" verify --verbose "$APK"
+            "$AAPT" dump badging "$APK" | grep -q "package: name='com.v2ray.ang'"
+            "$AAPT" dump badging "$APK" | grep -q "versionName='2.0.2'"
+            "$AAPT" dump badging "$APK" | grep -q "native-code:.*$ABI"
+          done
+
+      - name: Upload verified ARMv7 and ARM64 APKs
         uses: actions/upload-artifact@v4
         with:
-          name: C2ray-v2-debug-APKs
-          path: upstream/V2rayNG/app/build/outputs/apk/playstore/debug/*.apk
+          name: C2ray-v2.0.2-verified-APKs
+          path: build-dist/*.apk
           if-no-files-found: error
           retention-days: 14

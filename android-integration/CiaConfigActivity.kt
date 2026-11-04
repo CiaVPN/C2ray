@@ -193,7 +193,7 @@ class CiaConfigActivity : BaseComponentActivity() {
                                     setResult(RESULT_OK)
                                     Toast.makeText(
                                         this@CiaConfigActivity,
-                                        "همگام‌سازی انجام شد؛ \${lastImported} کانفیگ جدید اضافه شد",
+                                        "همگام‌سازی انجام شد؛ $lastImported کانفیگ جدید اضافه شد",
                                         Toast.LENGTH_LONG
                                     ).show()
                                     finish()

@@ -123,13 +123,10 @@ def main() -> None:
     text = gradle.read_text(encoding="utf-8")
     if 'applicationId = "com.v2ray.ang"' not in text:
         raise RuntimeError("Unexpected package ID; the existing package name must be preserved")
-    text = text.replace("versionCode = 800", "versionCode = 802")
-    text = text.replace('versionName = "2.0.0"', 'versionName = "2.0.2"')
     text = text.replace("versionCode = 755", "versionCode = 802")
-    text = text.replace('versionName = "2.3.15"', 'versionName = "2.0.2"')
     text = text.replace("v2rayNG_", "C2ray_")
-    if "versionCode = 802" not in text or 'versionName = "2.0.2"' not in text:
-        raise RuntimeError("Version metadata update failed")
+    if "versionCode = 802" not in text or 'versionName = "2.3.15"' not in text:
+        raise RuntimeError("Expected upstream 2.3.15 metadata was not preserved")
     gradle.write_text(text, encoding="utf-8")
 
     manifest = APP / "src/main/AndroidManifest.xml"
@@ -203,7 +200,7 @@ def main() -> None:
 
     install_icons()
 
-    print("C2ray 2.0.2 official branding installed.")
+    print("C2ray 2.3.15 official branding installed.")
     print("Package ID preserved: com.v2ray.ang")
     print("Main logo: CiaVPN/C2ray-Logo")
     print("Notification and Quick Settings logo: CiaVPN/C2ray-Logo")

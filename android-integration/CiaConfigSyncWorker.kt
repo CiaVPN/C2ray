@@ -16,15 +16,18 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.v2ray.ang.AppConfig
 import com.v2ray.ang.handler.AngConfigManager
+import com.v2ray.ang.util.LogUtil
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.json.JSONObject
 import java.io.IOException
-import java.net.URL
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
-import javax.net.ssl.HttpsURLConnection
 
 internal object CiaConfigSync {
     const val PREFS = "c2ray_cia_config_sync"
@@ -39,6 +42,16 @@ internal object CiaConfigSync {
     const val PERIODIC_WORK = "c2ray_cia_config_periodic"
     const val MANUAL_WORK = "c2ray_cia_config_manual"
     const val MIN_INTERVAL_MINUTES = 15
+
+    // Reuse one connection pool and let OkHttp recover from transient Cloudflare/mobile-network resets.
+    val httpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(25, TimeUnit.SECONDS)
+            .readTimeout(45, TimeUnit.SECONDS)
+            .callTimeout(60, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .build()
+    }
 }
 
 object CiaConfigSyncScheduler {
@@ -148,37 +161,7 @@ class CiaConfigSyncWorker(
         }
 
         return try {
-            val responseBody = withContext(Dispatchers.IO) {
-                val connection = URL(CiaConfigSync.WORKER_ENDPOINT).openConnection() as? HttpsURLConnection
-                    ?: throw IOException("Secure HTTPS connection could not be created")
-                try {
-                    connection.requestMethod = "GET"
-                    connection.instanceFollowRedirects = true
-                    connection.useCaches = false
-                    connection.connectTimeout = 30_000
-                    connection.readTimeout = 30_000
-                    connection.setRequestProperty("Accept", "application/json")
-                    connection.setRequestProperty("Cache-Control", "no-cache")
-                    connection.setRequestProperty("Pragma", "no-cache")
-                    connection.setRequestProperty("Connection", "close")
-                    connection.setRequestProperty("User-Agent", "C2ray-Android/2.3.16")
-
-                    val status = connection.responseCode
-                    val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-                    val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-                    if (status !in 200..299) {
-                        val detail = body.replace(Regex("\\s+"), " ").take(300)
-                        throw IOException(
-                            if (detail.isBlank()) "Channel Worker returned HTTP $status"
-                            else "Channel Worker returned HTTP $status: $detail"
-                        )
-                    }
-                    if (body.isBlank()) throw IOException("Channel Worker returned an empty response")
-                    body
-                } finally {
-                    connection.disconnect()
-                }
-            }
+            val responseBody = fetchWorkerResponse()
 
             val root = try {
                 JSONObject(responseBody)
@@ -242,6 +225,47 @@ class CiaConfigSyncWorker(
             if (runAttemptCount < 3) Result.retry()
             else Result.failure(workDataOf("error" to message))
         }
+    }
+
+    private suspend fun fetchWorkerResponse(): String {
+        var lastError: IOException? = null
+
+        repeat(3) { attempt ->
+            try {
+                return withContext(Dispatchers.IO) {
+                    val request = Request.Builder()
+                        .url(CiaConfigSync.WORKER_ENDPOINT)
+                        .get()
+                        .header("Accept", "application/json")
+                        .header("Cache-Control", "no-cache")
+                        .header("User-Agent", "C2ray-Android/2.3.16")
+                        .build()
+
+                    CiaConfigSync.httpClient.newCall(request).execute().use { response ->
+                        val body = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) {
+                            val detail = body.replace(Regex("\\s+"), " ").take(300)
+                            throw IOException(
+                                if (detail.isBlank()) "Channel Worker returned HTTP ${response.code}"
+                                else "Channel Worker returned HTTP ${response.code}: $detail"
+                            )
+                        }
+                        if (body.isBlank()) throw IOException("Channel Worker returned an empty response")
+                        body
+                    }
+                }
+            } catch (error: IOException) {
+                lastError = error
+                LogUtil.w(
+                    AppConfig.TAG,
+                    "CiaConfig Worker request attempt ${attempt + 1}/3 failed: ${error.javaClass.simpleName}",
+                    error
+                )
+                if (attempt < 2) delay(750L * (attempt + 1))
+            }
+        }
+
+        throw lastError ?: IOException("Could not connect to the CiaConfig Worker")
     }
 
     private fun isSupportedConfig(uri: String): Boolean {

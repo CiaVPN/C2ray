@@ -34,7 +34,7 @@ jobs:
           if [[ -z "$RUNS" ]]; then
             echo "No older workflow runs need cancellation."
           else
-            while IFS=$'\\t' read -r RUN_ID RUN_STATUS; do
+            while IFS=$'\t' read -r RUN_ID RUN_STATUS; do
               [[ -z "$RUN_ID" ]] && continue
               echo "Cancelling older workflow run $RUN_ID (status: $RUN_STATUS)"
               if gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/cancel" >/dev/null 2>&1; then

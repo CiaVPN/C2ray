@@ -136,3 +136,9 @@ This repository includes a **GNU General Public License v3.0 (GPL-3.0)** license
 <p align="center">
   Made with care by <a href="https://github.com/CiaVPN">CiaVPN</a> · <a href="https://github.com/CiaVPN/C2ray">Source Code</a> · <a href="https://github.com/CiaVPN/C2ray/releases">Releases</a>
 </p>
+
+## C2ray Version 2 — Channel Sync Backend
+
+The `cloudflare-worker/` directory contains the free Cloudflare Workers backend for automatic configuration discovery from the public Telegram channel **[@CiaConfig](https://t.me/CiaConfig)**. It exposes `GET /api/configs` and extracts supported share links from recent channel posts.
+
+See [Cloudflare Worker setup](cloudflare-worker/README.md) for deployment. This is the backend foundation; the Android integration and APK release are not included in this backend-only change.

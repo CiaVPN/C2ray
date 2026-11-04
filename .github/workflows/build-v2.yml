@@ -12,7 +12,7 @@ permissions:
 # Keep at most one running build and one pending build for this branch.
 # A newer push replaces a stale pending run without requiring gh CLI.
 concurrency:
-  group: c2ray-v2-build-\${{ github.ref }}
+  group: c2ray-v2-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -119,7 +119,7 @@ jobs:
         id: android_keystore
         with:
           fileName: "android_keystore.jks"
-          encodedString: \${{ secrets.APP_KEYSTORE_BASE64 }}
+          encodedString: ${{ secrets.APP_KEYSTORE_BASE64 }}
 
       - name: Build ARMv7 and ARM64 APKs
         shell: bash
@@ -128,10 +128,10 @@ jobs:
           cd upstream/V2rayNG
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           ./gradlew --no-daemon "-PABI_FILTERS=armeabi-v7a;arm64-v8a" assemblePlaystoreRelease \
-            -Pandroid.injected.signing.store.file="\${{ steps.android_keystore.outputs.filePath }}" \
-            -Pandroid.injected.signing.store.password="\${{ secrets.APP_KEYSTORE_PASSWORD }}" \
-            -Pandroid.injected.signing.key.alias="\${{ secrets.APP_KEYSTORE_ALIAS }}" \
-            -Pandroid.injected.signing.key.password="\${{ secrets.APP_KEY_PASSWORD }}"
+            -Pandroid.injected.signing.store.file="${{ steps.android_keystore.outputs.filePath }}" \
+            -Pandroid.injected.signing.store.password="${{ secrets.APP_KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.APP_KEYSTORE_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.APP_KEY_PASSWORD }}"
           mkdir -p "$GITHUB_WORKSPACE/build-dist"
           cp app/build/outputs/apk/playstore/release/C2ray_2.3.15_armeabi-v7a.apk "$GITHUB_WORKSPACE/build-dist/"
           cp app/build/outputs/apk/playstore/release/C2ray_2.3.15_arm64-v8a.apk "$GITHUB_WORKSPACE/build-dist/"

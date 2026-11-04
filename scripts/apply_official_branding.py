@@ -121,8 +121,8 @@ def install_icons() -> None:
 def main() -> None:
     gradle = APP / "build.gradle.kts"
     text = gradle.read_text(encoding="utf-8")
-    if 'applicationId = "com.v2ray.ang"' not in text:
-        raise RuntimeError("Unexpected package ID; the existing package name must be preserved")
+    if 'applicationId = "com.C2ray.ang"' not in text:
+        raise RuntimeError("Unexpected package ID; expected com.C2ray.ang")
     text = text.replace("versionCode = 755", "versionCode = 802")
     text = text.replace("v2rayNG_", "C2ray_")
     if "versionCode = 802" not in text or 'versionName = "2.3.15"' not in text:
@@ -183,10 +183,12 @@ def main() -> None:
             flags=re.DOTALL,
         )
         text = re.sub("v2rayNG", "C2ray", text, flags=re.IGNORECASE)
-        if strings_file == APP / "src/main/res/values/strings.xml" and "title_cia_config_sync" not in text:
+        if strings_file == APP / "src/main/res/values/strings.xml" and "title_channel_sync" not in text:
             text = text.replace(
                 "<resources>",
-                '<resources>\n    <string name="title_cia_config_sync">CiaConfig - Channel Sync</string>',
+                '<resources>\n'
+                '    <string name="title_channel_sync" translatable="false">Channel Sync</string>\n'
+                '    <string name="title_cia_config_channel" translatable="false">CiaConfig</string>',
                 1,
             )
         strings_file.write_text(text, encoding="utf-8")
@@ -201,7 +203,7 @@ def main() -> None:
     install_icons()
 
     print("C2ray 2.3.15 official branding installed.")
-    print("Package ID preserved: com.v2ray.ang")
+    print("Package ID set: com.C2ray.ang")
     print("Main logo: CiaVPN/C2ray-Logo")
     print("Notification and Quick Settings logo: CiaVPN/C2ray-Logo")
 

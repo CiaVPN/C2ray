@@ -7,11 +7,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: write
   contents: read
 
+# Keep at most one running build and one pending build for this branch.
+# A newer push replaces a stale pending run without requiring gh CLI.
 concurrency:
-  group: c2ray-v2-cleanup-${{ github.ref }}
+  group: c2ray-v2-build-\${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -20,61 +21,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - name: Cancel older queued C2ray runs on this branch
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100")"
-          LATEST_RUN_ID="$(jq -r --arg branch "${GITHUB_REF_NAME}" --arg path ".github/workflows/build-v2.yml" '
-            [.workflow_runs[] | select(.head_branch == $branch and .path == $path)]
-            | sort_by(.run_number) | last | .id // empty
-          ' <<<"$RUNS")"
-
-          if [[ "$LATEST_RUN_ID" != "$GITHUB_RUN_ID" ]]; then
-            echo "::error::This run is older than the latest C2ray build. It will not build."
-            exit 1
-          fi
-
-          mapfile -t OLD_RUNS < <(jq -r --arg branch "${GITHUB_REF_NAME}" --arg current "${GITHUB_RUN_ID}" '
-            .workflow_runs[]
-            | select(.head_branch == $branch and (.id | tostring) != $current)
-            | select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending" or .status == "requested")
-            | .id
-          ' <<<"$RUNS")
-
-          for run_id in "${OLD_RUNS[@]}"; do
-            echo "Cancelling previous C2ray Actions run: $run_id"
-            # force-cancel works for queued, waiting and in-progress runs.
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/$run_id/force-cancel" || true
-          done
-
-          echo "Only the newest C2ray build will continue."
-
       - name: Checkout C2ray source and pinned upstream
         uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
-
-      - name: Checkout official C2ray logo repository
-        uses: actions/checkout@v4
-        with:
-          repository: CiaVPN/C2ray-Logo
-          ref: main
-          path: branding-source
-          fetch-depth: 1
-
-      - name: Verify exact upstream release source
-        shell: bash
-        run: |
-          set -euo pipefail
-          EXPECTED_UPSTREAM="57907cf354d9769200ed4717b4430d605abe0952"
-          ACTUAL_UPSTREAM="$(git -C upstream rev-parse HEAD)"
-          echo "Pinned v2rayNG source: $ACTUAL_UPSTREAM"
-          test "$ACTUAL_UPSTREAM" = "$EXPECTED_UPSTREAM"
-          grep -q 'versionName = "2.3.15"' upstream/V2rayNG/app/build.gradle.kts
 
       - name: Set up Java 21
         uses: actions/setup-java@v4
@@ -98,16 +49,27 @@ jobs:
           python3 -m pip install --user Pillow
           echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
 
-      - name: Install exact official C2ray logos
+      - name: Verify exact upstream release source
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p branding
-          cp "branding-source/ChatGPT Image Nov 4, 2026, 06_50_57 PM.png" branding/official_c2ray_logo.png
-          cp "branding-source/InShot_20261104_190230658.png" branding/official_c2ray_notification.png
+          EXPECTED_UPSTREAM="57907cf354d9769200ed4717b4430d605abe0952"
+          ACTUAL_UPSTREAM="$(git -C upstream rev-parse HEAD)"
+          echo "Pinned v2rayNG source: $ACTUAL_UPSTREAM"
+          test "$ACTUAL_UPSTREAM" = "$EXPECTED_UPSTREAM"
+          grep -q 'versionName = "2.3.15"' upstream/V2rayNG/app/build.gradle.kts
+
+      - name: Install official C2ray branding assets
+        shell: bash
+        run: |
+          set -euo pipefail
           test -s branding/official_c2ray_logo.png
-          test -s branding/official_c2ray_notification.png
-          file branding/*.png
+          # Keep the build self-contained. Replace this fallback with the
+          # dedicated notification artwork when it is committed to branding/.
+          if [[ ! -s branding/official_c2ray_notification.png ]]; then
+            cp branding/official_c2ray_logo.png branding/official_c2ray_notification.png
+          fi
+          file branding/official_c2ray_logo.png branding/official_c2ray_notification.png
 
       - name: Apply C2ray identity and CiaConfig integration
         shell: bash
@@ -126,10 +88,10 @@ jobs:
           test -s "$APP/res/drawable-nodpi/c2ray_logo.png"
           test -s "$APP/res/drawable-nodpi/c2ray_notification.png"
           test -s "$APP/res/drawable-nodpi/ic_stat_name.png"
-          test -s "$APP/res/drawable-nodpi/ic_stat_proxy.png"
           test -s "$APP/res/drawable-nodpi/ic_stat_direct.png"
+          test -s "$APP/res/drawable-nodpi/ic_stat_proxy.png"
           grep -q 'R.drawable.ic_stat_name' "$APP/java/com/v2ray/ang/service/QSTileService.kt"
-          echo "C2ray branding, notification icon and Quick Settings tile are ready."
+          echo "C2ray launcher, drawer, notification and Quick Settings resources are ready."
 
       - name: Build native tunnel libraries
         shell: bash
@@ -152,7 +114,7 @@ jobs:
             --output upstream/V2rayNG/app/libs/libv2ray.aar
           test -s upstream/V2rayNG/app/libs/libv2ray.aar
 
-      - name: Build ARMv7 and ARM64 APKs in one Gradle run
+      - name: Build ARMv7 and ARM64 APKs
         shell: bash
         run: |
           set -euo pipefail
@@ -163,7 +125,7 @@ jobs:
           cp app/build/outputs/apk/playstore/debug/C2ray_2.3.15_armeabi-v7a.apk "$GITHUB_WORKSPACE/build-dist/"
           cp app/build/outputs/apk/playstore/debug/C2ray_2.3.15_arm64-v8a.apk "$GITHUB_WORKSPACE/build-dist/"
 
-      - name: Verify APK files, package, version, ABI, alignment and signatures
+      - name: Verify APK package, version, ABI, alignment and signature
         shell: bash
         run: |
           set -euo pipefail
@@ -177,16 +139,18 @@ jobs:
             unzip -t "$APK" >/dev/null
             "$ZIPALIGN" -c -p 4 "$APK"
             "$APKSIGNER" verify --verbose "$APK"
-            "$AAPT" dump badging "$APK" | grep -q "package: name='com.v2ray.ang'"
-            "$AAPT" dump badging "$APK" | grep -q "versionName='2.3.15'"
-            "$AAPT" dump badging "$APK" | grep -q "native-code:.*$ABI"
+            BADGING="$("$AAPT" dump badging "$APK")"
+            grep -q "package: name='com.v2ray.ang'" <<<"$BADGING"
+            grep -q "versionName='2.3.15'" <<<"$BADGING"
+            grep -q "native-code:.*$ABI" <<<"$BADGING"
             echo "Verified: $(basename "$APK")"
           done
 
-      - name: Upload only the two verified APKs
+      - name: Upload the two verified APKs
         uses: actions/upload-artifact@v4
         with:
           name: C2ray-2.3.15-ARMv7-ARM64-APKs
           path: build-dist/*.apk
           if-no-files-found: error
           retention-days: 14
+          compression-level: 0

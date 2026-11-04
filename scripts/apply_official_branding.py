@@ -163,9 +163,6 @@ def main() -> None:
 
     app_config = APP / "src/main/java/com/v2ray/ang/AppConfig.kt"
     replace_constant(app_config, "APP_URL", '"https://github.com/CiaVPN/C2ray"')
-    replace_constant(app_config, "APP_API_URL", '"https://api.github.com/repos/CiaVPN/C2ray/releases"')
-    replace_constant(app_config, "APP_ISSUES_URL", '"$APP_URL/issues"')
-    replace_constant(app_config, "APP_WIKI_MODE", '"$APP_URL/wiki"')
     replace_constant(app_config, "APP_PRIVACY_POLICY", '"$APP_URL/blob/main/CR.md"')
     replace_constant(app_config, "APP_PROMOTION_URL", '""')
     replace_constant(app_config, "TG_CHANNEL_URL", '"https://t.me/CiaConfig"')

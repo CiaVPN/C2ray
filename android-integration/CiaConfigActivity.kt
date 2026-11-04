@@ -44,7 +44,7 @@ class CiaConfigActivity : BaseComponentActivity() {
             mutableStateOf(prefs.getBoolean(CiaConfigSync.KEY_ENABLED, true))
         }
         var interval by rememberSaveable {
-            mutableIntStateOf(prefs.getInt(CiaConfigSync.KEY_INTERVAL, 30).coerceAtLeast(15))
+            mutableIntStateOf(prefs.getInt(CiaConfigSync.KEY_INTERVAL, 5).coerceIn(1, 360))
         }
         var syncing by rememberSaveable { mutableStateOf(false) }
         var lastSync by rememberSaveable {
@@ -58,8 +58,11 @@ class CiaConfigActivity : BaseComponentActivity() {
         }
 
         val scrollState = rememberScrollState()
-        val intervalValues = listOf("15", "30", "60", "180", "360")
+        val intervalValues = listOf("1", "5", "10", "15", "30", "60", "180", "360")
         val intervalEntries = listOf(
+            "هر ۱ دقیقه",
+            "هر ۵ دقیقه",
+            "هر ۱۰ دقیقه",
             "هر ۱۵ دقیقه",
             "هر ۳۰ دقیقه",
             "هر ۱ ساعت",
@@ -105,13 +108,13 @@ class CiaConfigActivity : BaseComponentActivity() {
                     values = intervalValues,
                     selectedValue = interval.toString(),
                     onSelected = { value ->
-                        interval = value.toIntOrNull() ?: 30
+                        interval = (value.toIntOrNull() ?: 5).coerceIn(1, 360)
                         persistSettings(enabled, interval)
                     }
                 )
 
                 Text(
-                    text = "همگام‌سازی پس‌زمینه فقط هنگام اتصال اینترنت اجرا می‌شود. اندروید حداقل بازهٔ ۱۵ دقیقه را برای کارهای دوره‌ای اعمال می‌کند.",
+                    text = "بازه‌های ۱، ۵ و ۱۰ دقیقه‌ای هنگام باز بودن C2ray اجرا می‌شوند. وقتی برنامه در پس‌زمینه است، محدودیت اندروید فاصلهٔ بررسی را حداقل ۱۵ دقیقه می‌کند؛ اجرای پس‌زمینه ممکن است با بهینه‌سازی باتری کمی دیرتر انجام شود.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -229,6 +232,16 @@ class CiaConfigActivity : BaseComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        CiaConfigSyncScheduler.startForegroundPolling(this)
+    }
+
+    override fun onPause() {
+        CiaConfigSyncScheduler.stopForegroundPolling()
+        super.onPause()
+    }
+
     private fun persistSettings(enabled: Boolean, interval: Int) {
         getSharedPreferences(CiaConfigSync.PREFS, MODE_PRIVATE)
             .edit()
@@ -237,5 +250,7 @@ class CiaConfigActivity : BaseComponentActivity() {
             .apply()
 
         CiaConfigSyncScheduler.configure(this, enabled, interval)
+        if (enabled) CiaConfigSyncScheduler.startForegroundPolling(this)
+        else CiaConfigSyncScheduler.stopForegroundPolling()
     }
 }

@@ -47,7 +47,7 @@ class CiaConfigActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val prefs = getSharedPreferences(CiaConfigSync.PREFS, MODE_PRIVATE)
-        val enabled = prefs.getBoolean(CiaConfigSync.KEY_ENABLED, true)
+        val enabled = prefs.getBoolean(CiaConfigSync.KEY_ENABLED, false)
         val endpoint = prefs.getString(CiaConfigSync.KEY_ENDPOINT, "").orEmpty()
         val interval = prefs.getInt(CiaConfigSync.KEY_INTERVAL, 30)
         val lastSync = prefs.getLong(CiaConfigSync.KEY_LAST_SYNC, 0L)

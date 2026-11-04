@@ -98,8 +98,22 @@ def main() -> None:
         activity,
         'import com.v2ray.ang.ui.checkupdate.CheckUpdateActivity',
         'import com.v2ray.ang.ui.checkupdate.CheckUpdateActivity\n'
-        'import com.v2ray.ang.ui.ciaconfig.CiaConfigActivity',
+        'import com.v2ray.ang.ui.ciaconfig.CiaConfigActivity\n'
+        'import com.v2ray.ang.ui.ciaconfig.CiaConfigSync\n'
+        'import com.v2ray.ang.ui.ciaconfig.CiaConfigSyncScheduler',
         "CiaConfig activity import",
+    )
+    replace_once(
+        activity,
+        '        mainViewModel.onAction(MainAction.Initialize)\n\n        checkAndRequestPermission',
+        '        mainViewModel.onAction(MainAction.Initialize)\n\n'
+        '        val syncPrefs = getSharedPreferences(CiaConfigSync.PREFS, MODE_PRIVATE)\n'
+        '        CiaConfigSyncScheduler.configure(\n'
+        '            this,\n'
+        '            syncPrefs.getBoolean(CiaConfigSync.KEY_ENABLED, false),\n'
+        '            syncPrefs.getInt(CiaConfigSync.KEY_INTERVAL, 30)\n'
+        '        )\n\n        checkAndRequestPermission',
+        "Restore CiaConfig background schedule",
     )
     replace_once(
         activity,

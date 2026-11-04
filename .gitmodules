@@ -4,3 +4,6 @@
 [submodule "hev-socks5-tunnel"]
 	path = hev-socks5-tunnel
 	url = https://github.com/heiher/hev-socks5-tunnel
+[submodule "upstream-v2rayng"]
+	path = upstream
+	url = https://github.com/2dust/v2rayNG

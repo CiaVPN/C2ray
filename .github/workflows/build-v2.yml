@@ -1,0 +1,77 @@
+name: C2ray v2 Android APK
+
+on:
+  push:
+    branches:
+      - v2-channel-sync-backend
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout C2ray and pinned upstream source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK and NDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          yes | sdkmanager --install \
+            "platforms;android-37" \
+            "build-tools;37.0.0" \
+            "platform-tools" \
+            "ndk;30.0.16248370"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
+
+      - name: Apply C2ray v2 branding and channel integration
+        run: |
+          python3 scripts/prepare_c2ray_v2.py
+          node --check cloudflare-worker/src/index.js
+
+      - name: Build native tunnel libraries
+        shell: bash
+        run: |
+          chmod +x compile-hevtun.sh upstream/V2rayNG/gradlew
+          ./compile-hevtun.sh
+          mkdir -p upstream/V2rayNG/app/libs
+          cp -R libs/. upstream/V2rayNG/app/libs/
+
+      - name: Download Xray Android library
+        shell: bash
+        run: |
+          CURRENT_TAG="$(git -C AndroidLibXrayLite describe --tags --abbrev=0)"
+          echo "Using AndroidLibXrayLite tag: $CURRENT_TAG"
+          curl --fail --location \
+            "https://github.com/2dust/AndroidLibXrayLite/releases/download/$CURRENT_TAG/libv2ray.aar" \
+            --output upstream/V2rayNG/app/libs/libv2ray.aar
+
+      - name: Build C2ray debug APKs
+        shell: bash
+        run: |
+          cd upstream/V2rayNG
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          ./gradlew --no-daemon assemblePlaystoreDebug
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: C2ray-v2-debug-APKs
+          path: upstream/V2rayNG/app/build/outputs/apk/playstore/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14

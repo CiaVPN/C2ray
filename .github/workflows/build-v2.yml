@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 # Keep at most one running build and one pending build for this branch.
 # A newer push replaces a stale pending run without requiring gh CLI.
@@ -21,6 +22,24 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
+      - name: Cancel older queued and running C2ray builds
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          CURRENT_RUN="$GITHUB_RUN_ID"
+          RUN_IDS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$GITHUB_REF_NAME&per_page=100" --jq ".workflow_runs[] | select(.path == \".github/workflows/build-v2.yml\" and .id != $CURRENT_RUN and .status != \"completed\" and .status != \"cancelled\") | .id")"
+          if [[ -z "$RUN_IDS" ]]; then
+            echo "No older C2ray builds need cancellation."
+          else
+            while IFS= read -r RUN_ID; do
+              [[ -z "$RUN_ID" ]] && continue
+              echo "Cancelling stale C2ray workflow run: $RUN_ID"
+              gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/cancel" || echo "::warning::Could not cancel run $RUN_ID"
+            done <<< "$RUN_IDS"
+          fi
+
       - name: Checkout C2ray source and pinned upstream
         uses: actions/checkout@v4
         with:

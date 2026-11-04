@@ -57,7 +57,7 @@ def main() -> None:
         raise RuntimeError("Unexpected upstream applicationId; refusing to apply the C2ray package identity")
     gradle_text = gradle_text.replace(
         'applicationId = "com.v2ray.ang"',
-        'applicationId = "com.c2ray.ang"',
+        'applicationId = "com.C2ray.ang"',
         1,
     )
     # Upstream is pinned to v2rayNG 2.3.15. Keep that release identity while
@@ -76,14 +76,21 @@ def main() -> None:
         drawer,
         '    Settings(R.drawable.ic_settings_24dp, R.string.title_settings),',
         '    Settings(R.drawable.ic_settings_24dp, R.string.title_settings),\n'
-        '    CiaConfig(R.drawable.ic_settings_24dp, R.string.title_cia_config_sync),',
+        '    ChannelSync(R.drawable.ic_settings_24dp, R.string.title_channel_sync),',
         "CiaConfig drawer destination",
     )
     replace_once(
         drawer,
         '    MainDestination.Settings\n)',
-        '    MainDestination.Settings,\n    MainDestination.CiaConfig\n)',
+        '    MainDestination.Settings,\n    MainDestination.ChannelSync\n)',
         "CiaConfig primary drawer entry",
+    )
+    replace_once(
+        drawer,
+        '    Promotion(R.drawable.ic_promotion_24dp, R.string.title_pref_promotion),',
+        '    CiaConfigChannel(R.drawable.ic_promotion_24dp, R.string.title_cia_config_channel),\n'
+        '    Promotion(R.drawable.ic_promotion_24dp, R.string.title_pref_promotion),',
+        "Add CiaConfig Telegram drawer destination",
     )
     replace_once(
         drawer,
@@ -91,8 +98,9 @@ def main() -> None:
         '    MainDestination.Promotion,\n'
         '    MainDestination.Logcat,',
         'private val drawerItems = primaryDrawerItems + listOf(\n'
+        '    MainDestination.CiaConfigChannel,\n'
         '    MainDestination.Logcat,',
-        "Remove upstream promotion entry",
+        "Keep CiaConfig Telegram shortcut in drawer",
     )
     replace_once(
         drawer,
@@ -118,15 +126,19 @@ def main() -> None:
         '        val syncPrefs = getSharedPreferences(CiaConfigSync.PREFS, MODE_PRIVATE)\n'
         '        CiaConfigSyncScheduler.configure(\n'
         '            this,\n'
-        '            syncPrefs.getBoolean(CiaConfigSync.KEY_ENABLED, false),\n'
+        '            syncPrefs.getBoolean(CiaConfigSync.KEY_ENABLED, true),\n'
         '            syncPrefs.getInt(CiaConfigSync.KEY_INTERVAL, 30)\n'
         '        )\n\n        checkAndRequestPermission',
         "Restore CiaConfig background schedule",
     )
     replace_once(
         activity,
+        '            MainDestination.CiaConfigChannel -> {\n'
+        '                Utils.openUri(this, "https://t.me/CiaConfig")\n'
+        '                return\n'
+        '            }\n'
         '            MainDestination.Settings -> Intent(this, SettingsActivity::class.java)',
-        '            MainDestination.CiaConfig -> Intent(this, CiaConfigActivity::class.java)\n'
+        '            MainDestination.ChannelSync -> Intent(this, CiaConfigActivity::class.java)\n'
         '            MainDestination.Settings -> Intent(this, SettingsActivity::class.java)',
         "CiaConfig activity navigation",
     )
@@ -185,10 +197,12 @@ def main() -> None:
             flags=re.DOTALL,
         )
         text = re.sub(r'v2rayNG', 'C2ray', text, flags=re.IGNORECASE)
-        if strings_file == APP / "src/main/res/values/strings.xml" and "title_cia_config_sync" not in text:
+        if strings_file == APP / "src/main/res/values/strings.xml" and "title_channel_sync" not in text:
             text = text.replace(
                 "<resources>",
-                '<resources>\n    <string name="title_cia_config_sync">CiaConfig - Channel Sync</string>',
+                '<resources>\n'
+                '    <string name="title_channel_sync" translatable="false">Channel Sync</string>\n'
+                '    <string name="title_cia_config_channel" translatable="false">CiaConfig</string>',
                 1,
             )
         strings_file.write_text(text, encoding="utf-8")
@@ -200,7 +214,7 @@ def main() -> None:
     shutil.copy2(ROOT / "android-integration/CiaConfigActivity.kt", target / "CiaConfigActivity.kt")
 
     print("C2ray v2 Android integration applied.")
-    print("Application ID set to: com.c2ray.ang")
+    print("Application ID set to: com.C2ray.ang")
     print("Channel: https://t.me/CiaConfig")
 
 

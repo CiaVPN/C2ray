@@ -1,12 +1,12 @@
 const CHANNEL = "CiaConfig";
-const DEFAULT_CACHE_SECONDS = 120;
+const DEFAULT_CACHE_SECONDS = 10;
 const SCHEMES = new Set(["vless", "vmess", "ss", "trojan", "socks", "socks5", "hysteria2", "hy2", "wireguard"]);
 
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Cache-Control",
     "Cache-Control": "no-store"
   };
 }
@@ -65,6 +65,45 @@ function json(data, status = 200, extra = {}) {
   });
 }
 
+async function fetchTelegramPage() {
+  const channelUrl = `https://t.me/s/${CHANNEL}`;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const upstream = await fetch(channelUrl, {
+        method: "GET",
+        redirect: "follow",
+        headers: {
+          "Accept": "text/html,application/xhtml+xml",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Cache-Control": "no-cache",
+          "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36"
+        },
+        cf: { cacheTtl: 0, cacheEverything: false }
+      });
+
+      if (upstream.ok) return await upstream.text();
+
+      const detail = (await upstream.text()).replace(/\s+/g, " ").slice(0, 240);
+      lastError = new Error(`Telegram returned HTTP ${upstream.status}${detail ? `: ${detail}` : ""}`);
+
+      if (upstream.status < 500 && upstream.status !== 429) {
+        throw lastError;
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("Unknown Telegram fetch error");
+      if (attempt === 3) break;
+    }
+
+    if (attempt < 3) {
+      await new Promise(resolve => setTimeout(resolve, attempt * 350));
+    }
+  }
+
+  throw lastError || new Error("Telegram channel connection failed after retries");
+}
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === "OPTIONS") {
@@ -81,36 +120,27 @@ export default {
         status: "ok",
         channel: CHANNEL,
         endpoints: ["/api/configs", "/health"],
-        note: "Public Telegram channels only"
+        cacheSeconds: DEFAULT_CACHE_SECONDS,
+        note: "Reads the latest available posts from the public Telegram channel"
       });
     }
     if (url.pathname !== "/api/configs") {
       return json({ error: "Not found" }, 404);
     }
 
-    const cacheKey = new Request(new URL("/api/configs", url.origin).toString(), request);
+    const cacheKey = new Request(new URL("/api/configs", url.origin).toString(), { method: "GET" });
     const cache = caches.default;
     const cached = await cache.match(cacheKey);
     if (cached) return cached;
 
-    const channelUrl = `https://t.me/s/${CHANNEL}`;
     try {
-      const upstream = await fetch(channelUrl, {
-        headers: {
-          "Accept": "text/html,application/xhtml+xml",
-          "User-Agent": "Mozilla/5.0 (compatible; C2rayChannelSync/2.0)"
-        },
-        cf: { cacheTtl: 0, cacheEverything: false }
-      });
-      if (!upstream.ok) {
-        return json({
-          error: "Telegram channel page is unavailable",
-          upstreamStatus: upstream.status
-        }, 502);
-      }
-
-      const html = await upstream.text();
+      const html = await fetchTelegramPage();
       const configs = collectConfigs(html);
+      const configuredTtl = Number(env.CACHE_SECONDS ?? DEFAULT_CACHE_SECONDS);
+      const cacheSeconds = Number.isFinite(configuredTtl)
+        ? Math.max(5, Math.min(30, Math.trunc(configuredTtl)))
+        : DEFAULT_CACHE_SECONDS;
+
       const response = json({
         ok: true,
         channel: CHANNEL,
@@ -118,15 +148,17 @@ export default {
         count: configs.length,
         configs
       }, 200, {
-        "Cache-Control": `public, max-age=${Math.max(30, Number(env.CACHE_SECONDS || DEFAULT_CACHE_SECONDS))}`
+        // Keep the API fresh; cache the parsed channel result for only a few seconds.
+        "Cache-Control": `public, max-age=0, s-maxage=${cacheSeconds}`
       });
 
       ctx.waitUntil(cache.put(cacheKey, response.clone()));
       return response;
     } catch (error) {
       return json({
+        ok: false,
         error: "Could not read Telegram channel",
-        message: error instanceof Error ? error.message : "Unknown error"
+        message: error instanceof Error ? error.message : "Unknown Telegram fetch error"
       }, 502);
     }
   }

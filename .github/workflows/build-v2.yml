@@ -23,6 +23,16 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      # Checkout the logo repository itself instead of building fragile raw URLs
+      # from filenames containing spaces and punctuation.
+      - name: Checkout official C2ray logo assets
+        uses: actions/checkout@v4
+        with:
+          repository: CiaVPN/C2ray-Logo
+          ref: main
+          path: branding-source
+          fetch-depth: 1
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -44,16 +54,13 @@ jobs:
           python3 -m pip install --user Pillow
           echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
 
-      - name: Download exact official C2ray-Logo images
+      - name: Prepare official C2ray logo assets
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p branding
-          curl --fail --location --retry 3 \
-            "https://raw.githubusercontent.com/CiaVPN/C2ray-Logo/main/ChatGPT%20Image%20Nov%204%2C%202026%2C%2006_50_57%20PM.png" \
-            --output branding/official_c2ray_logo.png
-          curl --fail --location --retry 3 \
-            "https://raw.githubusercontent.com/CiaVPN/C2ray-Logo/main/InShot_20261104_190230658.png" \
-            --output branding/official_c2ray_notification.png
+          cp "branding-source/ChatGPT Image Nov 4, 2026, 06_50_57 PM.png" branding/official_c2ray_logo.png
+          cp "branding-source/InShot_20261104_190230658.png" branding/official_c2ray_notification.png
           test -s branding/official_c2ray_logo.png
           test -s branding/official_c2ray_notification.png
           file branding/*.png
@@ -61,14 +68,19 @@ jobs:
       - name: Apply C2ray branding and CiaConfig integration
         shell: bash
         run: |
+          set -euo pipefail
           python3 scripts/prepare_c2ray_v2.py
           python3 scripts/apply_official_branding.py
           node --check cloudflare-worker/src/index.js
+          APP="upstream/V2rayNG/app/src/main"
           grep -q 'applicationId = "com.v2ray.ang"' upstream/V2rayNG/app/build.gradle.kts
           grep -q 'versionName = "2.0.2"' upstream/V2rayNG/app/build.gradle.kts
-          test -s upstream/V2rayNG/app/src/main/res/drawable-nodpi/c2ray_logo.png
-          test -s upstream/V2rayNG/app/src/main/res/drawable-nodpi/c2ray_notification.png
-          test -s upstream/V2rayNG/app/src/main/res/drawable-nodpi/ic_stat_name.png
+          test -s "$APP/res/drawable-nodpi/c2ray_logo.png"
+          test -s "$APP/res/drawable-nodpi/c2ray_notification.png"
+          test -s "$APP/res/drawable-nodpi/ic_stat_name.png"
+          test -s "$APP/res/drawable-nodpi/ic_stat_proxy.png"
+          test -s "$APP/res/drawable-nodpi/ic_stat_direct.png"
+          grep -q 'R.drawable.ic_stat_name' "$APP/java/com/v2ray/ang/service/QSTileService.kt"
 
       - name: Build native tunnel libraries
         shell: bash
@@ -84,13 +96,15 @@ jobs:
         run: |
           CURRENT_TAG="$(git -C upstream/AndroidLibXrayLite describe --tags --abbrev=0)"
           echo "Using AndroidLibXrayLite tag: $CURRENT_TAG"
-          curl --fail --location \
+          curl --fail --location --retry 3 \
             "https://github.com/2dust/AndroidLibXrayLite/releases/download/$CURRENT_TAG/libv2ray.aar" \
             --output upstream/V2rayNG/app/libs/libv2ray.aar
+          test -s upstream/V2rayNG/app/libs/libv2ray.aar
 
       - name: Build C2ray ARMv7 APK
         shell: bash
         run: |
+          set -euo pipefail
           cd upstream/V2rayNG
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           ./gradlew --no-daemon -PABI_FILTERS=armeabi-v7a assemblePlaystoreDebug
@@ -100,6 +114,7 @@ jobs:
       - name: Build C2ray ARM64 APK
         shell: bash
         run: |
+          set -euo pipefail
           cd upstream/V2rayNG
           ./gradlew --no-daemon clean
           ./gradlew --no-daemon -PABI_FILTERS=arm64-v8a assemblePlaystoreDebug
@@ -113,7 +128,7 @@ jobs:
           APKSIGNER="$ANDROID_HOME/build-tools/37.0.0/apksigner"
           ZIPALIGN="$ANDROID_HOME/build-tools/37.0.0/zipalign"
           for ABI in armeabi-v7a arm64-v8a; do
-            APK="$GITHUB_WORKSPACE/build-dist/C2ray_2.0.2_"$ABI".apk"
+            APK="$GITHUB_WORKSPACE/build-dist/C2ray_2.0.2_$ABI.apk"
             test -s "$APK"
             unzip -t "$APK" >/dev/null
             "$ZIPALIGN" -c -p 4 "$APK"

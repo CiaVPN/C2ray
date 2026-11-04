@@ -252,6 +252,6 @@ class CiaConfigSyncWorker(
 
     private fun sha256(value: String): String {
         val bytes = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
-        return bytes.joinToString("") { byte -> "%02x".format(it) }
+        return bytes.joinToString("") { byte -> "%02x".format(byte) }
     }
 }

@@ -133,14 +133,14 @@ def main() -> None:
     )
     replace_once(
         activity,
+        '            MainDestination.Settings -> Intent(this, SettingsActivity::class.java)',
+        '            MainDestination.ChannelSync -> Intent(this, CiaConfigActivity::class.java)\n'
         '            MainDestination.CiaConfigChannel -> {\n'
         '                Utils.openUri(this, "https://t.me/CiaConfig")\n'
         '                return\n'
         '            }\n'
         '            MainDestination.Settings -> Intent(this, SettingsActivity::class.java)',
-        '            MainDestination.ChannelSync -> Intent(this, CiaConfigActivity::class.java)\n'
-        '            MainDestination.Settings -> Intent(this, SettingsActivity::class.java)',
-        "CiaConfig activity navigation",
+        "Channel Sync and CiaConfig channel navigation",
     )
     # Refresh the profile list after the CiaConfig screen returns from a completed import.
     activity_text = activity.read_text(encoding="utf-8")

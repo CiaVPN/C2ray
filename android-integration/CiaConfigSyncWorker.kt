@@ -27,7 +27,7 @@ import javax.net.ssl.HttpsURLConnection
 internal object CiaConfigSync {
     const val PREFS = "c2ray_cia_config_sync"
     const val KEY_ENABLED = "enabled"
-    const val KEY_ENDPOINT = "endpoint"
+    const val WORKER_ENDPOINT = "https://c2ray-channel-sync.webserviceamir.workers.dev/api/configs"
     const val KEY_INTERVAL = "interval_minutes"
     const val KEY_HASHES = "imported_hashes"
     const val KEY_LAST_SYNC = "last_sync"
@@ -93,11 +93,11 @@ class CiaConfigSyncWorker(
         val prefs = applicationContext.getSharedPreferences(CiaConfigSync.PREFS, Context.MODE_PRIVATE)
         val force = inputData.getBoolean(CiaConfigSync.KEY_FORCE, false)
 
-        if (!force && !prefs.getBoolean(CiaConfigSync.KEY_ENABLED, false)) {
+        if (!force && !prefs.getBoolean(CiaConfigSync.KEY_ENABLED, true)) {
             return Result.success()
         }
 
-        val endpoint = prefs.getString(CiaConfigSync.KEY_ENDPOINT, "").orEmpty().trim()
+        val endpoint = CiaConfigSync.WORKER_ENDPOINT
         if (!endpoint.startsWith("https://", ignoreCase = true)) {
             prefs.edit().putString(CiaConfigSync.KEY_LAST_ERROR, "Set a valid HTTPS Worker URL").apply()
             return Result.failure(workDataOf("error" to "Set a valid HTTPS Worker URL"))

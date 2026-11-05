@@ -113,18 +113,21 @@ function Write-C2rayIco {
     }
 }
 
-$mainLogoUrl = "https://raw.githubusercontent.com/CiaVPN/C2ray-Logo/main/ChatGPT%20Image%20Nov%204,%202026,%2006_50_57%20PM.png"
-$trayLogoUrl = "https://raw.githubusercontent.com/CiaVPN/C2ray-Logo/main/InShot_20261104_190230658.png"
+$logoArchiveUrl = "https://codeload.github.com/CiaVPN/C2ray-Logo/zip/refs/heads/main"
 
 $temp = Join-Path ([System.IO.Path]::GetTempPath()) ("c2ray-brand-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $temp -Force | Out-Null
 
 try {
-    $mainPng = Join-Path $temp "c2ray-main.png"
-    $trayPng = Join-Path $temp "c2ray-tray.png"
+    # Download the logo repository as an archive so filenames containing spaces
+    # and commas do not depend on raw-file URL encoding.
+    $logoArchive = Join-Path $temp "c2ray-logos.zip"
+    Invoke-WebRequest -Uri $logoArchiveUrl -OutFile $logoArchive
+    Expand-Archive -LiteralPath $logoArchive -DestinationPath $temp -Force
 
-    Invoke-WebRequest -Uri $mainLogoUrl -OutFile $mainPng
-    Invoke-WebRequest -Uri $trayLogoUrl -OutFile $trayPng
+    $logoRoot = Join-Path $temp "C2ray-Logo-main"
+    $mainPng = Join-Path $logoRoot "ChatGPT Image Nov 4, 2026, 06_50_57 PM.png"
+    $trayPng = Join-Path $logoRoot "InShot_20261104_190230658.png"
 
     foreach ($image in @($mainPng, $trayPng)) {
         if (-not (Test-Path -LiteralPath $image) -or (Get-Item -LiteralPath $image).Length -lt 1000) {

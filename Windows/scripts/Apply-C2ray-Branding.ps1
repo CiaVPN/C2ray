@@ -208,10 +208,44 @@ try {
     # WPF application display name and tray tooltip.
     $mainWindowPath = Join-Path $appRoot "Views\MainWindow.xaml"
     Set-RequiredText $mainWindowPath 'Title="v2rayN"' 'Title="C2ray"'
-    Set-RequiredText $mainWindowPath '<MenuItem x:Name="menuCheckUpdate" Header="{x:Static resx:ResUI.menuCheckUpdate}" />' @'
-<MenuItem x:Name="menuCheckUpdate" Header="{x:Static resx:ResUI.menuCheckUpdate}" />
-                                <MenuItem x:Name="menuCiaConfig" Header="CiaConfig Telegram" />
+    Set-RequiredText $mainWindowPath '<MenuItem x:Name="menuCheckUpdate" Header="{x:Static resx:ResUI.menuCheckUpdate}" />' '<MenuItem x:Name="menuCheckUpdate" Header="{x:Static resx:ResUI.menuCheckUpdate}" />'
+    Set-RequiredText $mainWindowPath @'
+                                <MenuItem x:Name="menuCheckUpdate" Header="{x:Static resx:ResUI.menuCheckUpdate}" />
+                                <Separator Margin="-40,5" />
+                            </MenuItem>
+                        </Menu>
+                        <Separator />
+                        <Menu Margin="0,1" Style="{StaticResource ToolbarMenu}">
+                            <MenuItem
+                                x:Name="menuReload"
+'@ @'
+                                <MenuItem x:Name="menuCheckUpdate" Header="{x:Static resx:ResUI.menuCheckUpdate}" />
+                                <Separator Margin="-40,5" />
+                            </MenuItem>
+                        </Menu>
+                        <Separator />
+                        <Menu Margin="0,1" Style="{StaticResource ToolbarMenu}">
+                            <MenuItem
+                                x:Name="menuCiaConfig"
+                                Padding="{StaticResource MarginLeftRight8}"
+                                AutomationProperties.Name="CiaConfig">
+                                <MenuItem.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon
+                                            Margin="{StaticResource MarginRight8}"
+                                            VerticalAlignment="Center"
+                                            Kind="CloudDownloadOutline" />
+                                        <TextBlock Text="CiaConfig" />
+                                    </StackPanel>
+                                </MenuItem.Header>
+                                <MenuItem x:Name="menuOpenCiaConfig" Header="Open CiaConfig Telegram channel" />
                                 <MenuItem x:Name="menuSyncCiaConfig" Header="Sync CiaConfig now" />
+                            </MenuItem>
+                        </Menu>
+                        <Separator />
+                        <Menu Margin="0,1" Style="{StaticResource ToolbarMenu}">
+                            <MenuItem
+                                x:Name="menuReload"
 '@
 
     $statusBarPath = Join-Path $appRoot "Views\StatusBarView.xaml"
@@ -224,13 +258,12 @@ using ServiceLib.Services;
 '@
     Set-RequiredText $mainWindowCodeBehindPath 'menuCheckUpdate.Click += MenuCheckUpdate_Click;' @'
 menuCheckUpdate.Click += MenuCheckUpdate_Click;
-        menuCiaConfig.Click += MenuCiaConfig_Click;
+        menuOpenCiaConfig.Click += MenuOpenCiaConfig_Click;
         menuSyncCiaConfig.Click += MenuSyncCiaConfig_Click;
         Loaded += MainWindow_Loaded;
-        menuCiaConfig.Click += MenuCiaConfig_Click;
 '@
     Set-RequiredText $mainWindowCodeBehindPath '    private void MenuBackupAndRestore_Click' @'
-    private void MenuCiaConfig_Click(object sender, RoutedEventArgs e)
+    private void MenuOpenCiaConfig_Click(object sender, RoutedEventArgs e)
     {
         ProcUtils.ProcessStart("https://t.me/CiaConfig");
     }
@@ -320,7 +353,7 @@ menuCheckUpdate.Click += MenuCheckUpdate_Click;
     Write-Host "Main icon: C2ray primary logo"
     Write-Host "Tray icons: C2ray official logo"
     Write-Host "GitHub updater: CiaVPN/C2ray"
-    Write-Host "Telegram menu: https://t.me/CiaConfig"
+    Write-Host "CiaConfig top menu: https://t.me/CiaConfig"
 }
 finally {
     Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue

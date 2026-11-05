@@ -96,7 +96,16 @@ jobs:
           Copy-Item -Path "Windows/_upstream/v2rayN" -Destination $sourceStage -Recurse
           Copy-Item -LiteralPath "Windows/scripts/Apply-C2ray-Branding.ps1" -Destination $sourceStage
           Copy-Item -LiteralPath "Windows/UPSTREAM.md" -Destination $sourceStage
+          Copy-Item -LiteralPath "Windows/README.txt" -Destination $sourceStage
+          Copy-Item -LiteralPath ".github/workflows/build-windows.yml" -Destination $sourceStage
           Copy-Item -LiteralPath "LICENSE" -Destination (Join-Path $sourceStage "LICENSE-GPL-3.0.txt")
+
+          foreach ($optionalFile in @("README.md", ".gitmodules")) {
+            $optionalPath = Join-Path "Windows/_upstream" $optionalFile
+            if (Test-Path -LiteralPath $optionalPath) {
+              Copy-Item -LiteralPath $optionalPath -Destination $sourceStage
+            }
+          }
 
           Compress-Archive -Path (Join-Path $sourceStage "*") -DestinationPath $sourcePackage -CompressionLevel Optimal
 
@@ -123,7 +132,7 @@ jobs:
 
   publish-release:
     name: Attach Windows packages to C2ray release
-    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     needs:
       - build
     runs-on: ubuntu-latest
@@ -137,15 +146,10 @@ jobs:
       - name: Upload packages to the selected release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.release_tag }}
+          tag_name: ${{ inputs.release_tag || 'C2ray-v2' }}
           files: |
             release/*.zip
           fail_on_unmatched_files: true
-          append_body: true
-          body: |
-            ## C2ray for Windows
-            - `C2ray-Windows-x64.zip`: Intel/AMD 64-bit Windows
-            - `C2ray-Windows-arm64.zip`: Windows on ARM
-            - `C2ray-Windows-source-7.25.6.zip`: corresponding GPL source
+          overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

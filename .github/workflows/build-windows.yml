@@ -76,6 +76,59 @@ jobs:
             throw "Expected C2ray.exe was not produced for $env:RID."
           }
 
+          # Bundle the official architecture-matched Xray runtime so profiles can start
+          # immediately after extraction, without a separate manual core download.
+          $coreAssetName = if ($env:RID -eq "win-arm64") {
+            "Xray-windows-arm64-v8a.zip"
+          } else {
+            "Xray-windows-64.zip"
+          }
+
+          $githubHeaders = @{
+            Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+            "User-Agent" = "CiaVPN-C2ray-Windows-Build"
+          }
+          $xrayRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/XTLS/Xray-core/releases/latest" -Headers $githubHeaders
+
+          $xrayAsset = $xrayRelease.assets |
+            Where-Object { $_.name -eq $coreAssetName } |
+            Select-Object -First 1
+          if ($null -eq $xrayAsset) {
+            throw "The latest Xray-core release ($($xrayRelease.tag_name)) does not contain $coreAssetName."
+          }
+
+          $xrayArchive = Join-Path $env:RUNNER_TEMP $coreAssetName
+          $xrayExtract = Join-Path $env:RUNNER_TEMP "c2ray-xray-core"
+          Invoke-WebRequest -Uri $xrayAsset.browser_download_url -OutFile $xrayArchive
+          if (-not (Test-Path -LiteralPath $xrayArchive) -or (Get-Item -LiteralPath $xrayArchive).Length -lt 1000000) {
+            throw "The Xray-core archive download is missing or incomplete."
+          }
+
+          if (Test-Path -LiteralPath $xrayExtract) {
+            Remove-Item -LiteralPath $xrayExtract -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $xrayExtract -Force | Out-Null
+          Expand-Archive -LiteralPath $xrayArchive -DestinationPath $xrayExtract -Force
+
+          $xrayExecutable = Get-ChildItem -LiteralPath $xrayExtract -Filter "xray.exe" -File -Recurse |
+            Select-Object -First 1
+          if ($null -eq $xrayExecutable) {
+            throw "The downloaded Xray-core archive does not contain xray.exe."
+          }
+
+          $xraySourceDir = $xrayExecutable.Directory.FullName
+          $xrayTargetDir = Join-Path $publishDir "bin\xray"
+          New-Item -ItemType Directory -Path $xrayTargetDir -Force | Out-Null
+          Get-ChildItem -LiteralPath $xraySourceDir -File |
+            Copy-Item -Destination $xrayTargetDir -Force
+
+          $bundledXray = Join-Path $xrayTargetDir "xray.exe"
+          if (-not (Test-Path -LiteralPath $bundledXray)) {
+            throw "Xray-core was not placed at the required path: $bundledXray"
+          }
+          Write-Host "Bundled Xray-core $($xrayRelease.tag_name) from $coreAssetName."
+
           $hasSigningCertificate = -not [string]::IsNullOrWhiteSpace($env:C2RAY_SIGNING_CERTIFICATE_BASE64)
           $hasSigningPassword = -not [string]::IsNullOrWhiteSpace($env:C2RAY_SIGNING_CERTIFICATE_PASSWORD)
           if ($hasSigningCertificate -and $hasSigningPassword) {

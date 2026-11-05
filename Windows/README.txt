@@ -7,8 +7,10 @@ Uses the same public Worker as the Android app:
 https://c2ray-channel-sync.webserviceamir.workers.dev/api/configs
 
 Automatic sync runs at startup and checks no more than once every 15 minutes.
-Use Help > Sync CiaConfig now for a manual check. Existing profiles are not
+Use the CiaConfig menu in the top bar > Sync CiaConfig now for a manual check. Existing profiles are not
 imported twice; the standard C2ray profile parser is used.
+
+The Windows package includes the matching Xray-core executable under bin/xray.
 
 GitHub releases: https://github.com/CiaVPN/C2ray/releases
 Telegram: https://t.me/CiaConfig

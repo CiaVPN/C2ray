@@ -113,21 +113,22 @@ function Write-C2rayIco {
     }
 }
 
-$logoArchiveUrl = "https://codeload.github.com/CiaVPN/C2ray-Logo/zip/refs/heads/main"
+$assetsRoot = Join-Path (Split-Path -Parent $PSScriptRoot) "assets"
+$logoSource = Join-Path $assetsRoot "C2ray-Main.png"
+if (-not (Test-Path -LiteralPath $logoSource)) {
+    throw "The official C2ray logo is missing from Windows/assets: $logoSource"
+}
 
 $temp = Join-Path ([System.IO.Path]::GetTempPath()) ("c2ray-brand-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $temp -Force | Out-Null
 
 try {
-    # Download the logo repository as an archive so filenames containing spaces
-    # and commas do not depend on raw-file URL encoding.
-    $logoArchive = Join-Path $temp "c2ray-logos.zip"
-    Invoke-WebRequest -Uri $logoArchiveUrl -OutFile $logoArchive
-    Expand-Archive -LiteralPath $logoArchive -DestinationPath $temp -Force
+    $mainPng = Join-Path $temp "c2ray-main.png"
+    $trayPng = Join-Path $temp "c2ray-tray.png"
 
-    $logoRoot = Join-Path $temp "C2ray-Logo-main"
-    $mainPng = Join-Path $logoRoot "ChatGPT Image Nov 4, 2026, 06_50_57 PM.png"
-    $trayPng = Join-Path $logoRoot "InShot_20261104_190230658.png"
+    # Use the exact same official C2ray artwork for the app and every tray state.
+    Copy-Item -LiteralPath $logoSource -Destination $mainPng
+    Copy-Item -LiteralPath $logoSource -Destination $trayPng
 
     foreach ($image in @($mainPng, $trayPng)) {
         if (-not (Test-Path -LiteralPath $image) -or (Get-Item -LiteralPath $image).Length -lt 1000) {

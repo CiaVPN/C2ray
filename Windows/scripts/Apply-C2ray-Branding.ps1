@@ -292,6 +292,14 @@ menuCheckUpdate.Click += MenuCheckUpdate_Click;
         try
         {
             var result = await CiaConfigFeedService.SyncAsync(force);
+
+            // Importing writes to SQLite; explicitly refresh the live profile list and group counts.
+            if (ViewModel is { } viewModel)
+            {
+                await viewModel.ProfilesViewModel.RefreshServers();
+                await viewModel.ProfilesViewModel.RefreshSubscriptions();
+            }
+
             if (force || result.Added > 0)
             {
                 await DelegateSnackMsg(result.Message);

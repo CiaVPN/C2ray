@@ -127,7 +127,24 @@ jobs:
           if (-not (Test-Path -LiteralPath $bundledXray)) {
             throw "Xray-core was not placed at the required path: $bundledXray"
           }
-          Write-Host "Bundled Xray-core $($xrayRelease.tag_name) from $coreAssetName."
+
+          # v2rayN resolves geodata from the bin directory (bin\geosite.dat / bin\geoip.dat),
+          # not from the nested bin\xray directory that contains the executable.
+          $binDir = Join-Path $publishDir "bin"
+          foreach ($geoFile in @("geoip.dat", "geosite.dat")) {
+            $geoSource = Join-Path $xraySourceDir $geoFile
+            if (-not (Test-Path -LiteralPath $geoSource)) {
+              throw "The official Xray archive is missing required geodata file: $geoFile"
+            }
+            Copy-Item -LiteralPath $geoSource -Destination (Join-Path $binDir $geoFile) -Force
+          }
+
+          foreach ($requiredFile in @($bundledXray, (Join-Path $binDir "geoip.dat"), (Join-Path $binDir "geosite.dat"))) {
+            if (-not (Test-Path -LiteralPath $requiredFile)) {
+              throw "A required C2ray runtime file is missing: $requiredFile"
+            }
+          }
+          Write-Host "Bundled Xray-core $($xrayRelease.tag_name) and GeoIP/GeoSite data for $env:RID."
 
           $hasSigningCertificate = -not [string]::IsNullOrWhiteSpace($env:C2RAY_SIGNING_CERTIFICATE_BASE64)
           $hasSigningPassword = -not [string]::IsNullOrWhiteSpace($env:C2RAY_SIGNING_CERTIFICATE_PASSWORD)

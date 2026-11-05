@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Existing C2ray release tag to attach the Windows packages to (for example C2ray-v2)"
+        description: "Optional release tag. Blank uses v<version from Windows/version.txt>, e.g. v2.3.16."
         required: false
         type: string
         default: ""
@@ -55,6 +55,8 @@ jobs:
         shell: pwsh
         env:
           RID: ${{ matrix.rid }}
+          C2RAY_SIGNING_CERTIFICATE_BASE64: ${{ secrets.C2RAY_SIGNING_CERTIFICATE_BASE64 }}
+          C2RAY_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.C2RAY_SIGNING_CERTIFICATE_PASSWORD }}
         run: |
           $publishDir = Join-Path $env:GITHUB_WORKSPACE "dist\$env:RID"
           New-Item -ItemType Directory -Path $publishDir -Force | Out-Null
@@ -72,6 +74,42 @@ jobs:
           $exe = Join-Path $publishDir "C2ray.exe"
           if (-not (Test-Path -LiteralPath $exe)) {
             throw "Expected C2ray.exe was not produced for $env:RID."
+          }
+
+          $hasSigningCertificate = -not [string]::IsNullOrWhiteSpace($env:C2RAY_SIGNING_CERTIFICATE_BASE64)
+          $hasSigningPassword = -not [string]::IsNullOrWhiteSpace($env:C2RAY_SIGNING_CERTIFICATE_PASSWORD)
+          if ($hasSigningCertificate -and $hasSigningPassword) {
+            $certificatePath = Join-Path $env:RUNNER_TEMP "c2ray-codesign.pfx"
+            [System.IO.File]::WriteAllBytes(
+              $certificatePath,
+              [Convert]::FromBase64String($env:C2RAY_SIGNING_CERTIFICATE_BASE64)
+            )
+
+            $signTool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.Directory.Name -eq "x64" } |
+              Sort-Object -Property FullName -Descending |
+              Select-Object -First 1
+            if ($null -eq $signTool) {
+              throw "Windows SDK signtool.exe was not found on the runner."
+            }
+
+            Get-ChildItem -LiteralPath $publishDir -Recurse -File |
+              Where-Object { $_.Extension -in @(".exe", ".dll") } |
+              ForEach-Object {
+                & $signTool.FullName sign /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /f $certificatePath /p $env:C2RAY_SIGNING_CERTIFICATE_PASSWORD $_.FullName
+                if ($LASTEXITCODE -ne 0) {
+                  throw "Authenticode signing failed for $($_.FullName)."
+                }
+              }
+
+            Remove-Item -LiteralPath $certificatePath -Force
+            Write-Host "C2ray binaries were Authenticode-signed."
+          }
+          elseif ($hasSigningCertificate -or $hasSigningPassword) {
+            throw "Both C2RAY_SIGNING_CERTIFICATE_BASE64 and C2RAY_SIGNING_CERTIFICATE_PASSWORD secrets must be configured."
+          }
+          else {
+            Write-Warning "No code-signing certificate configured; Windows may display a SmartScreen reputation warning."
           }
 
           Copy-Item -LiteralPath "Windows/README.txt" -Destination $publishDir
@@ -131,12 +169,26 @@ jobs:
           retention-days: 14
 
   publish-release:
-    name: Attach Windows packages to C2ray release
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+    name: Publish versioned C2ray Windows release
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     needs:
       - build
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout version metadata
+        uses: actions/checkout@v7
+
+      - name: Resolve release tag
+        id: release
+        shell: bash
+        run: |
+          version="$(tr -d '\r\n ' < Windows/version.txt)"
+          tag="${{ inputs.release_tag }}"
+          if [ -z "$tag" ]; then
+            tag="v$version"
+          fi
+          echo "tag_name=$tag" >> "$GITHUB_OUTPUT"
+
       - name: Download all Windows build artifacts
         uses: actions/download-artifact@v8
         with:
@@ -146,7 +198,7 @@ jobs:
       - name: Upload packages to the selected release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.release_tag || 'C2ray-v2' }}
+          tag_name: ${{ steps.release.outputs.tag_name }}
           files: |
             release/*.zip
           fail_on_unmatched_files: true

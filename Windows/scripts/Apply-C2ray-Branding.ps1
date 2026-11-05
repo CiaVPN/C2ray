@@ -163,29 +163,112 @@ try {
     $utilsPath = Join-Path $serviceRoot "Common\Utils.cs"
     Set-RequiredText $utilsPath 'Environment.SpecialFolder.LocalApplicationData), "v2rayN");' 'Environment.SpecialFolder.LocalApplicationData), "C2ray");'
 
-    # The existing Android release tag is not a semantic Windows application version.
-    # Keep the upstream self-updater out of the C2ray UI until C2ray publishes versioned Windows tags.
+    # Point the built-in updater at CiaVPN/C2ray and keep it enabled.
     $coreInfoPath = Join-Path $serviceRoot "Manager\CoreInfoManager.cs"
-    Set-RequiredText $coreInfoPath 'DownloadUrlWin64 = urlN + "/download/{0}/v2rayN-windows-64.zip",' 'DownloadUrlWin64 = urlN + "/download/{0}/C2ray-Windows-x64.zip",'
-    Set-RequiredText $coreInfoPath 'DownloadUrlWinArm64 = urlN + "/download/{0}/v2rayN-windows-arm64.zip",' 'DownloadUrlWinArm64 = urlN + "/download/{0}/C2ray-Windows-arm64.zip",'
-    Set-RequiredText $coreInfoPath @'
-            if (IsCheckUpdateSupported(ECoreType.v2rayN))
-            {
-                lst.Add(ECoreType.v2rayN);
-            }
+    Set-RequiredText $coreInfoPath 'DownloadUrlWin64 = urlN + "/download/{0}/v2rayN-windows-64.zip",' 'DownloadUrlWin64 = urlN + "/download/v{0}/C2ray-Windows-x64.zip",'
+    Set-RequiredText $coreInfoPath 'DownloadUrlWinArm64 = urlN + "/download/{0}/v2rayN-windows-arm64.zip",' 'DownloadUrlWinArm64 = urlN + "/download/v{0}/C2ray-Windows-arm64.zip",'
 
-'@ ''
+    # Only offer C2ray releases that actually contain the matching Windows architecture package.
+    $updateServicePath = Join-Path $serviceRoot "Services\UpdateService.cs"
+    Set-RequiredText $updateServicePath 'if (preRelease || coreInfo?.LockedMaxVersion != null)' 'if (type == ECoreType.v2rayN || preRelease || coreInfo?.LockedMaxVersion != null)'
+    Set-RequiredText $updateServicePath @'
+            var gitHubReleases = JsonUtils.Deserialize<List<GitHubRelease>>(result);
+            var gitHubRelease = preRelease ? gitHubReleases?.First() : gitHubReleases?.First(r => r.Prerelease == false);
+            tagName = gitHubRelease?.TagName;
+'@ @'
+            var gitHubReleases = JsonUtils.Deserialize<List<GitHubRelease>>(result);
+            GitHubRelease? gitHubRelease;
+            if (type == ECoreType.v2rayN)
+            {
+                var windowsAssetName = RuntimeInformation.ProcessArchitecture == Architecture.Arm64
+                    ? "C2ray-Windows-arm64.zip"
+                    : "C2ray-Windows-x64.zip";
+                gitHubRelease = gitHubReleases?
+                    .Where(r => !r.Draft && (preRelease ? r.Prerelease : !r.Prerelease))
+                    .Where(r => r.Assets?.Any(asset => string.Equals(asset.Name, windowsAssetName, StringComparison.OrdinalIgnoreCase)) == true)
+                    .OrderByDescending(r => r.PublishedAt)
+                    .FirstOrDefault();
+            }
+            else
+            {
+                gitHubRelease = preRelease ? gitHubReleases?.First() : gitHubReleases?.First(r => r.Prerelease == false);
+            }
+            tagName = gitHubRelease?.TagName;
+'@
 
     # WPF application display name and tray tooltip.
     $mainWindowPath = Join-Path $appRoot "Views\MainWindow.xaml"
     Set-RequiredText $mainWindowPath 'Title="v2rayN"' 'Title="C2ray"'
+    Set-RequiredText $mainWindowPath '<MenuItem x:Name="menuCheckUpdate" Header="{x:Static resx:ResUI.menuCheckUpdate}" />' @'
+<MenuItem x:Name="menuCheckUpdate" Header="{x:Static resx:ResUI.menuCheckUpdate}" />
+                                <MenuItem x:Name="menuCiaConfig" Header="CiaConfig Telegram" />
+'@
 
     $statusBarPath = Join-Path $appRoot "Views\StatusBarView.xaml"
     Set-RequiredText $statusBarPath 'ToolTipText="v2rayN"' 'ToolTipText="C2ray"'
 
+    $mainWindowCodeBehindPath = Join-Path $appRoot "Views\MainWindow.xaml.cs"
+    Set-RequiredText $mainWindowCodeBehindPath 'menuCheckUpdate.Click += MenuCheckUpdate_Click;' @'
+menuCheckUpdate.Click += MenuCheckUpdate_Click;
+        menuCiaConfig.Click += MenuCiaConfig_Click;
+'@
+    Set-RequiredText $mainWindowCodeBehindPath '    private void MenuBackupAndRestore_Click' @'
+    private void MenuCiaConfig_Click(object sender, RoutedEventArgs e)
+    {
+        ProcUtils.ProcessStart("https://t.me/CiaConfig");
+    }
+
+    private void MenuBackupAndRestore_Click
+'@
+
     # Version and Windows file metadata follow the Android release line.
+    $versionPath = Join-Path (Split-Path -Parent $PSScriptRoot) "version.txt"
+    if (-not (Test-Path -LiteralPath $versionPath)) {
+        throw "Windows/version.txt is required to define the C2ray Windows release version."
+    }
+    $version = (Get-Content -LiteralPath $versionPath -Raw).Trim()
+    if ($version -notmatch '^\d+\.\d+\.\d+
+
+    $projectPath = Join-Path $appRoot "v2rayN.csproj"
+    $project = Get-Content -LiteralPath $projectPath -Raw
+    if ($project -notmatch '<AssemblyName>') {
+        $project = $project.Replace(
+            '<OutputType>WinExe</OutputType>',
+            @'
+<OutputType>WinExe</OutputType>
+        <AssemblyName>C2ray</AssemblyName>
+        <Product>C2ray</Product>
+        <Company>CiaVPN</Company>
+'@
+        )
+        Set-Content -LiteralPath $projectPath -Value $project -NoNewline -Encoding utf8
+    }
+
+    # Replace branded application labels while retaining translations and format placeholders.
+    Get-ChildItem -LiteralPath (Join-Path $serviceRoot "Resx") -Filter "ResUI*.resx" -File |
+        ForEach-Object {
+            $content = Get-Content -LiteralPath $_.FullName -Raw
+            if ($content.Contains("v2rayN")) {
+                $content = $content.Replace("v2rayN", "C2ray")
+                Set-Content -LiteralPath $_.FullName -Value $content -NoNewline -Encoding utf8
+            }
+        }
+
+    Write-Host "C2ray branding applied successfully."
+    Write-Host "Main icon: C2ray primary logo"
+    Write-Host "Tray icons: C2ray official logo"
+    Write-Host "GitHub updater: CiaVPN/C2ray"
+    Write-Host "Telegram menu: https://t.me/CiaConfig"
+}
+finally {
+    Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
+}
+) {
+        throw "Windows/version.txt must contain a semantic version such as 2.3.16. Found: $version"
+    }
+
     $propsPath = Join-Path $SourceRoot "v2rayN\Directory.Build.props"
-    Set-RequiredText $propsPath '<Version>7.25.6</Version>' '<Version>2.3.16</Version>'
+    Set-RequiredText $propsPath '<Version>7.25.6</Version>' "<Version>$version</Version>"
     Set-RequiredText $propsPath '<Authors>2dust</Authors>' '<Authors>CiaVPN</Authors>'
 
     $projectPath = Join-Path $appRoot "v2rayN.csproj"

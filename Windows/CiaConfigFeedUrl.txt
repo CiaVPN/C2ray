@@ -1,1 +1,1 @@
-https://YOUR-R2-CUSTOM-DOMAIN/configs.json
+https://c2ray-channel-sync.webserviceamir.workers.dev/api/configs

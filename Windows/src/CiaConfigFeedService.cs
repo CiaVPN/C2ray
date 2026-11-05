@@ -46,7 +46,7 @@ public static class CiaConfigFeedService
 
             using var request = new HttpRequestMessage(HttpMethod.Get, FeedUrl);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            request.Headers.UserAgent.ParseAdd("C2ray-Windows/2.3.17");
+            request.Headers.UserAgent.ParseAdd("C2ray-Windows/2.3.18");
 
             using var response = await Http.SendAsync(
                 request,

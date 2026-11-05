@@ -1,0 +1,10 @@
+name = "c2ray-ciaconfig-cache"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[[r2_buckets]]
+binding = "CONFIGS"
+bucket_name = "c2ray-config-cache"

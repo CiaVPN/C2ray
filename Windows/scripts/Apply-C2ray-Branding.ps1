@@ -231,44 +231,6 @@ menuCheckUpdate.Click += MenuCheckUpdate_Click;
         throw "Windows/version.txt must contain a semantic version such as 2.3.16. Found: $version"
     }
 
-    $projectPath = Join-Path $appRoot "v2rayN.csproj"
-    $project = Get-Content -LiteralPath $projectPath -Raw
-    if ($project -notmatch '<AssemblyName>') {
-        $project = $project.Replace(
-            '<OutputType>WinExe</OutputType>',
-            @'
-<OutputType>WinExe</OutputType>
-        <AssemblyName>C2ray</AssemblyName>
-        <Product>C2ray</Product>
-        <Company>CiaVPN</Company>
-'@
-        )
-        Set-Content -LiteralPath $projectPath -Value $project -NoNewline -Encoding utf8
-    }
-
-    # Replace branded application labels while retaining translations and format placeholders.
-    Get-ChildItem -LiteralPath (Join-Path $serviceRoot "Resx") -Filter "ResUI*.resx" -File |
-        ForEach-Object {
-            $content = Get-Content -LiteralPath $_.FullName -Raw
-            if ($content.Contains("v2rayN")) {
-                $content = $content.Replace("v2rayN", "C2ray")
-                Set-Content -LiteralPath $_.FullName -Value $content -NoNewline -Encoding utf8
-            }
-        }
-
-    Write-Host "C2ray branding applied successfully."
-    Write-Host "Main icon: C2ray primary logo"
-    Write-Host "Tray icons: C2ray official logo"
-    Write-Host "GitHub updater: CiaVPN/C2ray"
-    Write-Host "Telegram menu: https://t.me/CiaConfig"
-}
-finally {
-    Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
-}
-) {
-        throw "Windows/version.txt must contain a semantic version such as 2.3.16. Found: $version"
-    }
-
     $propsPath = Join-Path $SourceRoot "v2rayN\Directory.Build.props"
     Set-RequiredText $propsPath '<Version>7.25.6</Version>' "<Version>$version</Version>"
     Set-RequiredText $propsPath '<Authors>2dust</Authors>' '<Authors>CiaVPN</Authors>'
@@ -300,7 +262,9 @@ finally {
 
     Write-Host "C2ray branding applied successfully."
     Write-Host "Main icon: C2ray primary logo"
-    Write-Host "Tray icons: CiaVPN secondary logo"
+    Write-Host "Tray icons: C2ray official logo"
+    Write-Host "GitHub updater: CiaVPN/C2ray"
+    Write-Host "Telegram menu: https://t.me/CiaConfig"
 }
 finally {
     Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue

@@ -140,6 +140,15 @@ try {
     $resourceRoot = Join-Path $appRoot "Resources"
     $serviceRoot = Join-Path $SourceRoot "v2rayN\ServiceLib"
 
+    # Install the CiaConfig importer into ServiceLib before compiling.
+    $feedServiceSource = Join-Path (Split-Path -Parent $PSScriptRoot) "src\CiaConfigFeedService.cs"
+    $feedServiceTarget = Join-Path $serviceRoot "Services\CiaConfigFeedService.cs"
+    if (-not (Test-Path -LiteralPath $feedServiceSource)) {
+        throw "The CiaConfig feed importer is missing: $feedServiceSource"
+    }
+    New-Item -ItemType Directory -Path (Split-Path -Parent $feedServiceTarget) -Force | Out-Null
+    Copy-Item -LiteralPath $feedServiceSource -Destination $feedServiceTarget -Force
+
     if (-not (Test-Path -LiteralPath $resourceRoot)) {
         throw "The pinned upstream Windows project layout was not found under $SourceRoot"
     }
@@ -202,20 +211,67 @@ try {
     Set-RequiredText $mainWindowPath '<MenuItem x:Name="menuCheckUpdate" Header="{x:Static resx:ResUI.menuCheckUpdate}" />' @'
 <MenuItem x:Name="menuCheckUpdate" Header="{x:Static resx:ResUI.menuCheckUpdate}" />
                                 <MenuItem x:Name="menuCiaConfig" Header="CiaConfig Telegram" />
+                                <MenuItem x:Name="menuSyncCiaConfig" Header="Sync CiaConfig now" />
 '@
 
     $statusBarPath = Join-Path $appRoot "Views\StatusBarView.xaml"
     Set-RequiredText $statusBarPath 'ToolTipText="v2rayN"' 'ToolTipText="C2ray"'
 
     $mainWindowCodeBehindPath = Join-Path $appRoot "Views\MainWindow.xaml.cs"
+    Set-RequiredText $mainWindowCodeBehindPath 'using v2rayN.Manager;' @'
+using v2rayN.Manager;
+using ServiceLib.Services;
+'@
     Set-RequiredText $mainWindowCodeBehindPath 'menuCheckUpdate.Click += MenuCheckUpdate_Click;' @'
 menuCheckUpdate.Click += MenuCheckUpdate_Click;
+        menuCiaConfig.Click += MenuCiaConfig_Click;
+        menuSyncCiaConfig.Click += MenuSyncCiaConfig_Click;
+        Loaded += MainWindow_Loaded;
         menuCiaConfig.Click += MenuCiaConfig_Click;
 '@
     Set-RequiredText $mainWindowCodeBehindPath '    private void MenuBackupAndRestore_Click' @'
     private void MenuCiaConfig_Click(object sender, RoutedEventArgs e)
     {
         ProcUtils.ProcessStart("https://t.me/CiaConfig");
+    }
+
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= MainWindow_Loaded;
+        await SyncCiaConfigAsync(false);
+    }
+
+    private async void MenuSyncCiaConfig_Click(object sender, RoutedEventArgs e)
+    {
+        menuSyncCiaConfig.IsEnabled = false;
+        try
+        {
+            await SyncCiaConfigAsync(true);
+        }
+        finally
+        {
+            menuSyncCiaConfig.IsEnabled = true;
+        }
+    }
+
+    private async Task SyncCiaConfigAsync(bool force)
+    {
+        try
+        {
+            var result = await CiaConfigFeedService.SyncAsync(force);
+            if (force || result.Added > 0)
+            {
+                await DelegateSnackMsg(result.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logging.SaveLog("CiaConfigSync", ex);
+            if (force)
+            {
+                await DelegateSnackMsg($"CiaConfig sync failed: {ex.Message}");
+            }
+        }
     }
 
     private void MenuBackupAndRestore_Click

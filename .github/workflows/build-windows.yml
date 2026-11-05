@@ -89,13 +89,21 @@ jobs:
             "X-GitHub-Api-Version" = "2022-11-28"
             "User-Agent" = "CiaVPN-C2ray-Windows-Build"
           }
-          $xrayRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/XTLS/Xray-core/releases/latest" -Headers $githubHeaders
+          # Keep compatibility with legacy CiaConfig VLESS links that use security=none.
+          # Xray v26.7.11+ rejects public VLESS without TLS/REALITY or VLESS Encryption.
+          # Pin the last verified compatible release; prefer TLS/REALITY links whenever possible
+          # because legacy plaintext VLESS has no transport encryption.
+          $xrayCoreVersion = "v26.6.27"
+          $xrayRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/XTLS/Xray-core/releases/tags/$xrayCoreVersion" -Headers $githubHeaders
+          if ($xrayRelease.tag_name -ne $xrayCoreVersion) {
+            throw "Expected Xray-core $xrayCoreVersion but received $($xrayRelease.tag_name)."
+          }
 
           $xrayAsset = $xrayRelease.assets |
             Where-Object { $_.name -eq $coreAssetName } |
             Select-Object -First 1
           if ($null -eq $xrayAsset) {
-            throw "The latest Xray-core release ($($xrayRelease.tag_name)) does not contain $coreAssetName."
+            throw "Xray-core $xrayCoreVersion does not contain $coreAssetName."
           }
 
           $xrayArchive = Join-Path $env:RUNNER_TEMP $coreAssetName
@@ -144,7 +152,7 @@ jobs:
               throw "A required C2ray runtime file is missing: $requiredFile"
             }
           }
-          Write-Host "Bundled Xray-core $($xrayRelease.tag_name) and GeoIP/GeoSite data for $env:RID."
+          Write-Host "Bundled compatible Xray-core $($xrayRelease.tag_name) and GeoIP/GeoSite data for $env:RID."
 
           $hasSigningCertificate = -not [string]::IsNullOrWhiteSpace($env:C2RAY_SIGNING_CERTIFICATE_BASE64)
           $hasSigningPassword = -not [string]::IsNullOrWhiteSpace($env:C2RAY_SIGNING_CERTIFICATE_PASSWORD)

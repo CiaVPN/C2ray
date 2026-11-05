@@ -10,7 +10,7 @@ Automatic sync runs at startup and checks no more than once every 15 minutes.
 Use the CiaConfig menu in the top bar > Sync CiaConfig now for a manual check. Existing profiles are not
 imported twice; the standard C2ray profile parser is used.
 
-The Windows package includes the matching Xray-core executable under bin/xray, plus geoip.dat and geosite.dat under bin/.
+The Windows package includes Xray-core v26.6.27 under bin/xray, plus geoip.dat and geosite.dat under bin/. This core version keeps compatibility with legacy public VLESS links using security=none. Such links do not have transport encryption; prefer TLS or REALITY profiles whenever available.
 
 GitHub releases: https://github.com/CiaVPN/C2ray/releases
 Telegram: https://t.me/CiaConfig

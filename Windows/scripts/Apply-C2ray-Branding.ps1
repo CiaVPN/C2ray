@@ -227,7 +227,9 @@ menuCheckUpdate.Click += MenuCheckUpdate_Click;
         throw "Windows/version.txt is required to define the C2ray Windows release version."
     }
     $version = (Get-Content -LiteralPath $versionPath -Raw).Trim()
-    if ($version -notmatch '^\d+\.\d+\.\d+
+    if ($version -notmatch '^\d+\.\d+\.\d+$') {
+        throw "Windows/version.txt must contain a semantic version such as 2.3.16. Found: $version"
+    }
 
     $projectPath = Join-Path $appRoot "v2rayN.csproj"
     $project = Get-Content -LiteralPath $projectPath -Raw

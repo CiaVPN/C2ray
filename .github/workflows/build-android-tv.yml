@@ -1,0 +1,175 @@
+name: Build C2ray Android TV
+
+on:
+  push:
+    branches:
+      - feature/c2ray-android-tv
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: c2ray-android-tv-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and verify Android TV APKs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout C2ray and pinned upstream source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Verify pinned v2rayNG source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED="57907cf354d9769200ed4717b4430d605abe0952"
+          ACTUAL="$(git -C upstream rev-parse HEAD)"
+          echo "Pinned upstream source: $ACTUAL"
+          test "$ACTUAL" = "$EXPECTED"
+          grep -q 'versionName = "2.3.15"' upstream/V2rayNG/app/build.gradle.kts
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK and NDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android build packages and image tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install \
+            "platforms;android-37.0" \
+            "build-tools;37.0.0" \
+            "platform-tools" \
+            "ndk;30.0.16248370"
+          python3 -m pip install --user Pillow
+          echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
+
+      - name: Download official C2ray logo artwork
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            "https://raw.githubusercontent.com/CiaVPN/C2ray-Logo/main/ChatGPT%20Image%20Nov%204%2C%202026%2C%2006_50_57%20PM.png" \
+            --output branding/official_c2ray_logo.png
+          curl --fail --location --retry 3 \
+            "https://raw.githubusercontent.com/CiaVPN/C2ray-Logo/main/InShot_20261104_190230658.png" \
+            --output branding/official_c2ray_notification.png
+          test -s branding/official_c2ray_logo.png
+          test -s branding/official_c2ray_notification.png
+
+      - name: Apply C2ray identity, CiaConfig sync and TV interface
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            scripts/prepare_c2ray_v2.py \
+            scripts/apply_official_branding.py \
+            scripts/prepare_c2ray_tv.py
+          python3 scripts/prepare_c2ray_v2.py
+          python3 scripts/apply_official_branding.py
+          python3 scripts/prepare_c2ray_tv.py
+          test -s upstream/V2rayNG/app/src/main/res/drawable-xhdpi/c2ray_tv_banner.png
+
+      - name: Build native HEV tunnel libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x upstream/compile-hevtun.sh upstream/V2rayNG/gradlew
+          cd upstream
+          ./compile-hevtun.sh
+          mkdir -p V2rayNG/app/libs
+          cp -R libs/. V2rayNG/app/libs/
+
+      - name: Download matching Xray Android library
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_TAG="$(git -C upstream/AndroidLibXrayLite describe --tags --abbrev=0)"
+          echo "Using AndroidLibXrayLite tag: $CURRENT_TAG"
+          curl --fail --location --retry 3 \
+            "https://github.com/2dust/AndroidLibXrayLite/releases/download/$CURRENT_TAG/libv2ray.aar" \
+            --output upstream/V2rayNG/app/libs/libv2ray.aar
+          test -s upstream/V2rayNG/app/libs/libv2ray.aar
+
+      - name: Build ARMv7 and ARM64 Android TV APKs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd upstream/V2rayNG
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          ./gradlew --no-daemon "-PABI_FILTERS=armeabi-v7a;arm64-v8a" assemblePlaystoreDebug
+          mkdir -p "$GITHUB_WORKSPACE/build-dist"
+          cp app/build/outputs/apk/playstore/debug/C2ray-TV_2.3.16-tv_armeabi-v7a.apk "$GITHUB_WORKSPACE/build-dist/"
+          cp app/build/outputs/apk/playstore/debug/C2ray-TV_2.3.16-tv_arm64-v8a.apk "$GITHUB_WORKSPACE/build-dist/"
+
+      - name: Verify package, version, ABI, TV launcher, alignment and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAPT="$ANDROID_HOME/build-tools/37.0.0/aapt"
+          APKSIGNER="$ANDROID_HOME/build-tools/37.0.0/apksigner"
+          ZIPALIGN="$ANDROID_HOME/build-tools/37.0.0/zipalign"
+
+          for ABI in armeabi-v7a arm64-v8a; do
+            APK="$GITHUB_WORKSPACE/build-dist/C2ray-TV_2.3.16-tv_$ABI.apk"
+            test -s "$APK"
+            unzip -t "$APK" >/dev/null
+            "$ZIPALIGN" -c -P 16 4 "$APK"
+            "$APKSIGNER" verify --verbose "$APK"
+
+            BADGING="$("$AAPT" dump badging "$APK")"
+            grep -q "package: name='com.c2ray.tv'" <<< "$BADGING"
+            grep -q "versionName='2.3.16-tv'" <<< "$BADGING"
+            grep -q "native-code:.*$ABI" <<< "$BADGING"
+            grep -q "application-label:'C2ray TV'" <<< "$BADGING"
+
+            MANIFEST="$("$AAPT" dump xmltree "$APK" AndroidManifest.xml)"
+            grep -q "android.intent.category.LEANBACK_LAUNCHER" <<< "$MANIFEST"
+            grep -q "android.software.leanback" <<< "$MANIFEST"
+            echo "Verified Android TV APK: $(basename "$APK")"
+          done
+
+      - name: Upload verified TV APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: C2ray-TV-2.3.16-ARMv7-ARM64
+          path: build-dist/*.apk
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Publish C2ray TV prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.3.16-tv
+          target_commitish: ${{ github.sha }}
+          name: C2ray TV 2.3.16
+          body: |
+            C2ray for Android TV
+
+            - Dedicated Android TV package: com.c2ray.tv
+            - Landscape interface with remote-control / D-pad focus navigation
+            - Two-column server list with TV-sized focus targets
+            - Official CiaVPN launcher and notification artwork
+            - Automatic CiaConfig channel synchronization using the existing C2ray Worker
+            - ARMv7 (32-bit) and ARM64 (64-bit) APKs
+
+            This is a GitHub prerelease. Please test on your Android TV device and report any remote-navigation issues.
+          prerelease: true
+          make_latest: false
+          files: build-dist/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

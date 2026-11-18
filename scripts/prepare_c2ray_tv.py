@@ -188,7 +188,7 @@ def apply_tv_navigation_and_focus() -> None:
         "import androidx.compose.foundation.shape.RoundedCornerShape\n"
         "import androidx.compose.runtime.mutableStateOf\n"
         "import androidx.compose.ui.draw.clip\n"
-        "import androidx.compose.ui.focus.focusGroup\n"
+        "import androidx.compose.foundation.focusGroup\n"
         "import androidx.compose.ui.focus.onFocusChanged\n"
         "import androidx.compose.ui.graphics.Color\n"
         "import androidx.compose.ui.platform.LocalContext",

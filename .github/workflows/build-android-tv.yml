@@ -81,6 +81,20 @@ jobs:
           python3 scripts/prepare_c2ray_v2.py
           python3 scripts/apply_official_branding.py
           python3 scripts/prepare_c2ray_tv.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          app = Path("upstream/V2rayNG/app")
+          for strings in (app / "src").rglob("strings.xml"):
+              text = strings.read_text(encoding="utf-8")
+              text = re.sub(
+                  r'(<string\s+name="app_name"[^>]*>).*?(</string>)',
+                  r'\1C2ray TV\2',
+                  text,
+                  flags=re.DOTALL,
+              )
+              strings.write_text(text, encoding="utf-8")
+          PY
           test -s upstream/V2rayNG/app/src/main/res/drawable-xhdpi/c2ray_tv_banner.png
 
       - name: Build native HEV tunnel libraries

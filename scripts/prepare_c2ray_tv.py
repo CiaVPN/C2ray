@@ -3,6 +3,7 @@
 from pathlib import Path
 import re
 import sys
+import xml.etree.ElementTree as ET
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -141,8 +142,20 @@ def apply_package_and_manifest() -> None:
     content, activity_count = re.subn(r"<activity\b[^>]*>", landscape_activity, content)
     if activity_count < 1:
         raise RuntimeError("No application activities were found to configure for landscape")
-    if 'android:hardware.touchscreen' not in content or 'android:required="false"' not in content:
+    # Validate the resulting XML and keep touch input optional on TV devices.
+    try:
+        manifest_root = ET.fromstring(content)
+    except ET.ParseError as exc:
+        raise RuntimeError(f"AndroidManifest.xml is not valid XML after TV changes: {exc}") from exc
+
+    android_ns = "{http://schemas.android.com/apk/res/android}"
+    touchscreen_features = [
+        feature for feature in manifest_root.findall("uses-feature")
+        if feature.attrib.get(android_ns + "name") == "android.hardware.touchscreen"
+    ]
+    if len(touchscreen_features) != 1 or touchscreen_features[0].attrib.get(android_ns + "required") != "false":
         raise RuntimeError("Touchscreen must remain optional for Android TV")
+
     manifest.write_text(content, encoding="utf-8")
 
 

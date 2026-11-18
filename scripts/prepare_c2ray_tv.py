@@ -121,13 +121,14 @@ def apply_package_and_manifest() -> None:
     content, count = leanback_pattern.subn(r'\1true\2', content, count=1)
     if count != 1:
         raise RuntimeError("Could not mark the Android TV leanback feature as required")
-    content = content.replace(
-        'android:banner="@mipmap/ic_banner"',
+    content, banner_count = re.subn(
+        r'android:banner="[^"]+"',
         'android:banner="@drawable/c2ray_tv_banner"',
-        1,
+        content,
+        count=1,
     )
-    if 'android:banner="@drawable/c2ray_tv_banner"' not in content:
-        raise RuntimeError("Android TV banner manifest reference is missing")
+    if banner_count != 1:
+        raise RuntimeError("Could not find exactly one application banner attribute")
 
     def landscape_activity(match: re.Match) -> str:
         tag = match.group(0)

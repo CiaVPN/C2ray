@@ -133,6 +133,8 @@ def apply_package_and_manifest() -> None:
         tag = match.group(0)
         if "android:screenOrientation=" in tag:
             return tag
+        if tag.rstrip().endswith("/>"):
+            return tag.rstrip()[:-2].rstrip() + '\n            android:screenOrientation="landscape" />'
         return tag[:-1].rstrip() + '\n            android:screenOrientation="landscape">'
 
     content, activity_count = re.subn(r"<activity\b[^>]*>", landscape_activity, content)

@@ -267,10 +267,11 @@ def apply_tv_navigation_and_focus() -> None:
 
 
 def main() -> None:
-    if not (UPSTREAM / ".git").exists():
-        # Git submodules may expose a .git file rather than a directory.
-        if not (UPSTREAM / ".git").is_file():
-            raise RuntimeError("Pinned upstream submodule is not initialized")
+    upstream_repo = ROOT / "upstream"
+    # The git checkout is at upstream/; V2rayNG/ is a nested Gradle project.
+    # Git worktrees may expose .git as either a directory or a file.
+    if not (upstream_repo / ".git").exists() and not (upstream_repo / ".git").is_file():
+        raise RuntimeError("Pinned upstream checkout is not initialized")
     apply_package_and_manifest()
     apply_tv_navigation_and_focus()
     create_tv_banner()
